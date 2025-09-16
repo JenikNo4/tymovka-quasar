@@ -2,80 +2,54 @@
   <q-layout view="lHh Lpr lFf">
     <q-header elevated>
       <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
+        <q-toolbar-title>TeamApp</q-toolbar-title>
 
-        <q-toolbar-title> Quasar App </q-toolbar-title>
+        <div v-if="auth.isLogged" class="row items-center q-gutter-sm">
+          <q-avatar size="28px" color="primary" text-color="white">
+            {{ initials }}
+          </q-avatar>
+          <span class="text-caption">{{ auth.user?.name || auth.user?.email }}</span>
+          <q-btn flat dense icon="dashboard" @click="$router.push({ name: 'dashboard' })"/>
+          <q-btn flat dense icon="logout" @click="logout"/>
+        </div>
 
-        <div>Quasar v{{ $q.version }}</div>
+        <div v-else>
+          <q-btn flat icon="login" label="Přihlásit" @click="goLogin"/>
+        </div>
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <q-list>
-        <q-item-label header> Essential Links </q-item-label>
-
-        <EssentialLink v-for="link in linksList" :key="link.title" v-bind="link" />
-      </q-list>
-    </q-drawer>
-
     <q-page-container>
-      <router-view />
+      <router-view/>
     </q-page-container>
   </q-layout>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import EssentialLink, { type EssentialLinkProps } from 'components/EssentialLink.vue';
+import {computed} from 'vue'
+import {useAuth} from 'src/stores/useAuth'
 
-const linksList: EssentialLinkProps[] = [
-  {
-    title: 'Docs',
-    caption: 'quasar.dev',
-    icon: 'school',
-    link: 'https://quasar.dev',
-  },
-  {
-    title: 'Github',
-    caption: 'github.com/quasarframework',
-    icon: 'code',
-    link: 'https://github.com/quasarframework',
-  },
-  {
-    title: 'Discord Chat Channel',
-    caption: 'chat.quasar.dev',
-    icon: 'chat',
-    link: 'https://chat.quasar.dev',
-  },
-  {
-    title: 'Forum',
-    caption: 'forum.quasar.dev',
-    icon: 'record_voice_over',
-    link: 'https://forum.quasar.dev',
-  },
-  {
-    title: 'Twitter',
-    caption: '@quasarframework',
-    icon: 'rss_feed',
-    link: 'https://twitter.quasar.dev',
-  },
-  {
-    title: 'Facebook',
-    caption: '@QuasarFramework',
-    icon: 'public',
-    link: 'https://facebook.quasar.dev',
-  },
-  {
-    title: 'Quasar Awesome',
-    caption: 'Community Quasar projects',
-    icon: 'favorite',
-    link: 'https://awesome.quasar.dev',
-  },
-];
+const auth = useAuth()
 
-const leftDrawerOpen = ref(false);
+const initials = computed(() => {
+  const name = auth.user?.name || auth.user?.email || ''
+  const emailPrefix = name.split('@')[0] ?? ''
+  const parts = emailPrefix.split(/[.\s_-]+/).filter(Boolean)
+  const letters = parts.slice(0, 2).map(p => p[0]?.toUpperCase() || '')
+  return letters.join('') || 'U'
+})
 
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value;
+function goLogin() {
+  window.location.href = `${import.meta.env.VITE_API_BASE_URL}/oauth2/authorization/google`
+}
+
+async function logout() {
+  try {
+    await fetch(`${import.meta.env.VITE_API_BASE_URL}/logout`, {method: 'POST', credentials: 'include'})
+  } catch {
+    console.error('Odhlaseni uživatele selhalo')
+  }
+  auth.setUser(null)
+  auth.setToken(null)
 }
 </script>
