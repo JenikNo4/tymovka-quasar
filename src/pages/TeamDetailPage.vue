@@ -45,6 +45,42 @@
       </q-card-section>
     </q-card>
 
+    <q-card v-if="team && myMembership" bordered flat class="q-mb-md">
+      <q-card-section>
+        <div class="text-subtitle1">{{ t('teamDetail.myRoleSectionTitle') }}</div>
+      </q-card-section>
+      <q-card-section class="q-gutter-md">
+        <q-select
+          v-model="myPlayerRoleDraft"
+          :options="playerRoleOptions"
+          emit-value
+          map-options
+          outlined
+          dense
+          :label="t('teamDetail.myPlayerRoleLabel')"
+        />
+        <q-input
+          v-model="myProfileNumberDraft"
+          outlined
+          dense
+          type="number"
+          min="0"
+          max="99"
+          :label="t('teamDetail.myJerseyNumberLabel')"
+          :hint="t('teamDetail.myJerseyNumberHint')"
+        />
+      </q-card-section>
+      <q-card-actions align="right">
+        <q-btn
+          color="primary"
+          :disable="isMyRoleSaveDisabled"
+          :loading="saveRoleLoading"
+          :label="t('teamDetail.saveMyRole')"
+          @click="saveMyTeamRole"
+        />
+      </q-card-actions>
+    </q-card>
+
     <q-card v-if="team?.viewerCanInvite" bordered flat class="q-mb-md">
       <q-card-section>
         <div class="text-subtitle1">{{ t('teamDetail.inviteMembersTitle') }}</div>
@@ -81,7 +117,7 @@
           <q-item-section>
             <q-item-label>{{ m.user.displayName }} ({{ m.user.email }})</q-item-label>
             <q-item-label caption>
-              {{ t('teamDetail.roleLabel') }}: {{ m.role }} | {{ t('teamDetail.statusLabel') }}: {{ m.status }} | {{ t('teamDetail.playerRoleLabel') }}: {{ m.playerRole }}
+              {{ t('teamDetail.roleLabel') }}: {{ m.role }} | {{ t('teamDetail.statusLabel') }}: {{ m.status }} | {{ t('teamDetail.playerRoleLabel') }}: {{ m.playerRole }} | {{ t('teamDetail.jerseyNumberLabel') }}: {{ m.jerseyNumber ?? '-' }}
             </q-item-label>
           </q-item-section>
           <q-item-section side v-if="team?.viewerCanManage && m.status === 'APPROVED'">
@@ -106,7 +142,7 @@
           <q-item-section>
             <q-item-label>{{ m.user.displayName }} ({{ m.user.email }})</q-item-label>
             <q-item-label caption>
-              {{ t('teamDetail.roleLabel') }}: {{ m.role }} | {{ t('teamDetail.statusLabel') }}: {{ m.status }} | {{ t('teamDetail.playerRoleLabel') }}: {{ m.playerRole }}
+              {{ t('teamDetail.roleLabel') }}: {{ m.role }} | {{ t('teamDetail.statusLabel') }}: {{ m.status }} | {{ t('teamDetail.playerRoleLabel') }}: {{ m.playerRole }} | {{ t('teamDetail.jerseyNumberLabel') }}: {{ m.jerseyNumber ?? '-' }}
             </q-item-label>
           </q-item-section>
           <q-item-section side>
@@ -131,7 +167,7 @@
         </q-card-section>
 
         <q-card-section class="q-gutter-md">
-          <q-input v-model="createForm.title" outlined dense :label="t('event.title')" />
+          <q-input v-model="createForm.title" outlined dense :label="requiredLabel(t('event.title'))" />
           <q-select
             v-model="createForm.eventType"
             :options="eventTypes"
@@ -140,9 +176,9 @@
             :label="t('event.type')"
             @update:model-value="applyCreateTypeDefaults"
           />
-          <q-input v-model="createForm.startLocal" outlined dense type="datetime-local" :label="t('event.start')" />
+          <q-input v-model="createForm.startLocal" outlined dense type="datetime-local" :label="requiredLabel(t('event.start'))" />
           <q-input v-model="createForm.endLocal" outlined dense type="datetime-local" :label="t('event.endOptional')" />
-          <q-input v-model="createForm.location" outlined dense :label="t('event.location')" />
+          <q-input v-model="createForm.location" outlined dense :label="requiredLabel(t('event.location'))" />
           <q-input v-model="createForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="createForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="createForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
@@ -203,6 +239,7 @@ type TeamMember = {
   role: 'ADMIN' | 'MEMBER'
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
   playerRole: 'PLAYER' | 'GOALKEEPER'
+  jerseyNumber?: number | null
   user: {
     id: string
     email: string
@@ -233,6 +270,10 @@ const team = ref<TeamDetail | null>(null)
 const members = ref<TeamMember[]>([])
 const pendingMembers = ref<TeamMember[]>([])
 const memberActionId = ref('')
+const myMembership = ref<TeamMember | null>(null)
+const myPlayerRoleDraft = ref<'PLAYER' | 'GOALKEEPER' | null>(null)
+const myProfileNumberDraft = ref('')
+const saveRoleLoading = ref(false)
 const inviteLoading = ref(false)
 const inviteEmailsText = ref('')
 const inviteResult = ref<InviteResult | null>(null)
@@ -261,6 +302,16 @@ const createMemberOptions = computed<TeamMembershipOption[]>(() =>
       label: `${m.user.displayName} (${m.user.email})`,
     }))
 )
+const playerRoleOptions = computed(() => [
+  { label: t('teamDetail.playerRolePlayer'), value: 'PLAYER' as const },
+  { label: t('teamDetail.playerRoleGoalkeeper'), value: 'GOALKEEPER' as const },
+])
+const isMyRoleSaveDisabled = computed(() => {
+  if (!myMembership.value || !myPlayerRoleDraft.value) return true
+  const currentJersey = myMembership.value.jerseyNumber != null ? String(myMembership.value.jerseyNumber) : ''
+  const draftJersey = myProfileNumberDraft.value.trim()
+  return myPlayerRoleDraft.value === myMembership.value.playerRole && currentJersey === draftJersey
+})
 
 async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
@@ -307,6 +358,10 @@ function toIsoOrNull(localValue: string): string | null {
   const date = new Date(localValue)
   if (Number.isNaN(date.getTime())) return null
   return date.toISOString()
+}
+
+function requiredLabel(label: string): string {
+  return `${label} *`
 }
 
 const INVALID_CAPACITY = Symbol('INVALID_CAPACITY')
@@ -456,6 +511,7 @@ async function loadTeamDetail() {
           role
           status
           playerRole
+          jerseyNumber
           user { id email displayName nickname }
         }
       }
@@ -463,6 +519,26 @@ async function loadTeamDetail() {
       { teamId }
     )
     members.value = membersData.teamMembers
+    const myMembershipData = await gqlRequest<{ myTeamMembership: TeamMember | null }>(
+      `
+      query($teamId: ID!) {
+        myTeamMembership(teamId: $teamId) {
+          id
+          role
+          status
+          playerRole
+          jerseyNumber
+          user { id email displayName nickname }
+        }
+      }
+      `,
+      { teamId }
+    )
+    myMembership.value = myMembershipData.myTeamMembership
+    myPlayerRoleDraft.value = myMembership.value?.playerRole ?? null
+    myProfileNumberDraft.value = myMembership.value?.jerseyNumber != null
+      ? String(myMembership.value.jerseyNumber)
+      : ''
 
     if (team.value.viewerCanManage) {
       const pendingData = await gqlRequest<{ pendingMembers: TeamMember[] }>(
@@ -473,6 +549,7 @@ async function loadTeamDetail() {
             role
             status
             playerRole
+            jerseyNumber
             user { id email displayName nickname }
           }
         }
@@ -487,6 +564,37 @@ async function loadTeamDetail() {
     errorMessage.value = err instanceof Error ? err.message : t('teamDetail.loadFailed')
   } finally {
     loading.value = false
+  }
+}
+
+async function saveMyTeamRole() {
+  if (!myPlayerRoleDraft.value) return
+  const rawNumber = myProfileNumberDraft.value.trim()
+  const parsedNumber = rawNumber ? Number(rawNumber) : null
+  if (
+    parsedNumber != null &&
+    (!Number.isInteger(parsedNumber) || parsedNumber < 0 || parsedNumber > 99)
+  ) {
+    $q.notify({ type: 'warning', message: t('teamDetail.invalidJerseyNumber') })
+    return
+  }
+  saveRoleLoading.value = true
+  try {
+    const data = await gqlRequest<{ setMyTeamPlayerRole: boolean }>(
+      `
+      mutation($teamId: ID!, $playerRole: PlayerRole!, $jerseyNumber: Int) {
+        setMyTeamPlayerRole(teamId: $teamId, playerRole: $playerRole, jerseyNumber: $jerseyNumber)
+      }
+      `,
+      { teamId, playerRole: myPlayerRoleDraft.value, jerseyNumber: parsedNumber }
+    )
+    if (!data.setMyTeamPlayerRole) throw new Error(t('teamDetail.saveMyRoleFailed'))
+    await loadTeamDetail()
+    $q.notify({ type: 'positive', message: t('teamDetail.saveMyRoleSuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('teamDetail.saveMyRoleFailed') })
+  } finally {
+    saveRoleLoading.value = false
   }
 }
 

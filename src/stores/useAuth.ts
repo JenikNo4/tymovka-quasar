@@ -16,6 +16,7 @@ type User = {
   firstName: string
   lastName: string
   nickname: string | null
+  dateOfBirth: string | null
   preferredLanguage: 'cs-CZ' | 'en-US' | null
   preferredPositions: string[]
   roles: 'USER' | 'ADMIN' | 'SUPER_ADMIN'
@@ -48,6 +49,7 @@ export const useAuth = defineStore('auth', {
               lastName
               email
               nickname
+              dateOfBirth
               preferredLanguage
               preferredPositions
               roles
@@ -93,6 +95,7 @@ export const useAuth = defineStore('auth', {
           this.user = {
             ...userData,
             nickname: userData.nickname ?? null,
+            dateOfBirth: userData.dateOfBirth ?? null,
             preferredLanguage,
             preferredPositions: Array.isArray(userData.preferredPositions)
               ? userData.preferredPositions
@@ -184,12 +187,14 @@ export const useAuth = defineStore('auth', {
       firstName?: string | null
       lastName?: string | null
       nickname?: string | null
+      dateOfBirth?: string | null
       preferredPositions?: string[]
     }) {
       if (!this.user) return
       const previousFirstName = this.user.firstName
       const previousLastName = this.user.lastName
       const previousNickname = this.user.nickname
+      const previousDateOfBirth = this.user.dateOfBirth
       const previousPositions = [...(this.user.preferredPositions ?? [])]
 
       if (Object.prototype.hasOwnProperty.call(input, 'firstName')) {
@@ -201,6 +206,9 @@ export const useAuth = defineStore('auth', {
       if (Object.prototype.hasOwnProperty.call(input, 'nickname')) {
         this.user.nickname = input.nickname ?? null
       }
+      if (Object.prototype.hasOwnProperty.call(input, 'dateOfBirth')) {
+        this.user.dateOfBirth = input.dateOfBirth ?? null
+      }
       if (Array.isArray(input.preferredPositions)) {
         this.user.preferredPositions = input.preferredPositions
       }
@@ -211,17 +219,20 @@ export const useAuth = defineStore('auth', {
             $firstName: String
             $lastName: String
             $nickname: String
+            $dateOfBirth: String
             $preferredPositions: [PreferredPosition!]
           ) {
             updateProfile(
               firstName: $firstName
               lastName: $lastName
               nickname: $nickname
+              dateOfBirth: $dateOfBirth
               preferredPositions: $preferredPositions
             ) {
               firstName
               lastName
               nickname
+              dateOfBirth
               preferredPositions
             }
           }
@@ -239,6 +250,7 @@ export const useAuth = defineStore('auth', {
               firstName: input.firstName,
               lastName: input.lastName,
               nickname: input.nickname,
+              dateOfBirth: input.dateOfBirth,
               preferredPositions: input.preferredPositions,
             },
           }),
@@ -253,6 +265,7 @@ export const useAuth = defineStore('auth', {
             firstName?: string | null
             lastName?: string | null
             nickname?: string | null
+            dateOfBirth?: string | null
             preferredPositions?: string[] | null
           }
         }> = await response.json()
@@ -266,6 +279,7 @@ export const useAuth = defineStore('auth', {
           this.user.firstName = saved.firstName ?? ''
           this.user.lastName = saved.lastName ?? ''
           this.user.nickname = saved.nickname ?? null
+          this.user.dateOfBirth = saved.dateOfBirth ?? null
           this.user.preferredPositions = Array.isArray(saved.preferredPositions)
             ? saved.preferredPositions
             : ['PLAYER']
@@ -274,6 +288,7 @@ export const useAuth = defineStore('auth', {
         this.user.firstName = previousFirstName
         this.user.lastName = previousLastName
         this.user.nickname = previousNickname
+        this.user.dateOfBirth = previousDateOfBirth
         this.user.preferredPositions = previousPositions
         throw error
       }

@@ -42,6 +42,25 @@
         </div>
       </q-card-section>
 
+      <q-card-section v-if="!event.viewerCanSetAttendanceForOthers">
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.participantsList') }}</div>
+        <q-list bordered separator>
+          <q-item v-for="p in event.participants" :key="p.id">
+            <q-item-section>
+              <q-item-label>{{ p.membership?.user.displayName || t('common.unknownMember') }}</q-item-label>
+              <q-item-label caption>
+                {{ p.membership?.user.email || '-' }}
+                <q-badge
+                  class="q-ml-sm"
+                  :color="statusColor(p.status)"
+                  :label="statusLabel(p.status)"
+                />
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+
       <q-card-section v-if="event.viewerCanSetAttendanceForOthers">
         <div class="text-subtitle1 q-mb-sm">{{ t('event.addParticipants') }}</div>
         <div class="row q-gutter-sm items-center q-mb-md">
@@ -72,7 +91,12 @@
             <q-item-section>
               <q-item-label>{{ p.membership?.user.displayName || t('common.unknownMember') }}</q-item-label>
               <q-item-label caption>
-                {{ p.membership?.user.email || '-' }} | {{ t('teamDetail.statusLabel') }}: {{ statusLabel(p.status) }}
+                {{ p.membership?.user.email || '-' }}
+                <q-badge
+                  class="q-ml-sm"
+                  :color="statusColor(p.status)"
+                  :label="statusLabel(p.status)"
+                />
               </q-item-label>
             </q-item-section>
             <q-item-section side>
@@ -213,6 +237,13 @@ function isPastEvent(value: EventItem | null): boolean {
 function statusLabel(status: ParticipantStatus | null): string {
   if (!status) return t('event.noStatus')
   return t(`event.statusLabel.${status}`)
+}
+
+function statusColor(status: ParticipantStatus | null): string {
+  if (status === 'GOING') return 'positive'
+  if (status === 'MAYBE') return 'warning'
+  if (status === 'DECLINED') return 'negative'
+  return 'grey-7'
 }
 
 function eventTypeLabel(eventType: string): string {

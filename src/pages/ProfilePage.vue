@@ -8,6 +8,7 @@
       <q-input v-model="form.firstName" outlined dense :label="t('profile.firstName')" />
       <q-input v-model="form.lastName" outlined dense :label="t('profile.lastName')" />
       <q-input v-model="form.nickname" outlined dense :label="t('profile.nickname')" />
+      <q-input v-model="form.dateOfBirth" outlined dense type="date" :label="t('profile.dateOfBirth')" />
 
       <q-option-group
         v-model="form.preferredPositions"
@@ -38,6 +39,7 @@ const form = ref({
   firstName: '',
   lastName: '',
   nickname: '',
+  dateOfBirth: '',
   preferredPositions: [] as string[],
 })
 
@@ -52,6 +54,7 @@ watch(
     form.value.firstName = user?.firstName ?? ''
     form.value.lastName = user?.lastName ?? ''
     form.value.nickname = user?.nickname ?? ''
+    form.value.dateOfBirth = user?.dateOfBirth ?? ''
     form.value.preferredPositions = user?.preferredPositions?.length
       ? [...user.preferredPositions]
       : ['PLAYER']
@@ -67,6 +70,7 @@ async function saveProfile() {
       firstName: form.value.firstName.trim() || null,
       lastName: form.value.lastName.trim() || null,
       nickname: form.value.nickname.trim() || null,
+      dateOfBirth: form.value.dateOfBirth || null,
       preferredPositions: selected,
     })
     $q.notify({ type: 'positive', message: t('profile.saved') })
