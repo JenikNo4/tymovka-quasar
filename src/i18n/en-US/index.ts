@@ -50,6 +50,14 @@ export default {
     declineSuccess: 'Invite was declined.',
     actionFailed: 'Invite action failed',
     teamInviteTitle: 'Team invite',
+    ok: 'OK',
+    resolvedAt: 'Resolved: {resolution} ({date})',
+    resolution: {
+      ACCEPTED: 'accepted',
+      DECLINED: 'declined',
+      DISMISSED: 'acknowledged',
+      AUTO_RESOLVED: 'auto-resolved',
+    },
   },
 
   profile: {
@@ -163,6 +171,8 @@ export default {
     myAttendance: 'My attendance',
     participantManagement: 'Participant management',
     participantsList: 'Participants',
+    signedSummary: 'Signed up',
+    goalies: 'goalies',
     addParticipants: 'Add participants',
     selectMembers: 'Select members',
     add: 'Add',

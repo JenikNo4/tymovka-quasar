@@ -19,6 +19,7 @@
       <q-card-section>
         <div class="text-subtitle1">{{ event.team.name }} | {{ eventTypeLabel(event.eventType) }}</div>
         <div class="text-caption text-grey-7">{{ formatDateTime(event.startTime) }}</div>
+        <div class="text-caption text-grey-8 q-mt-xs">{{ attendanceSummary(event) }}</div>
       </q-card-section>
       <q-separator />
       <q-card-section>
@@ -164,6 +165,7 @@ type EventParticipant = {
   substituteName?: string | null
   membership?: {
     id: string
+    playerRole?: 'PLAYER' | 'GOALKEEPER'
     user: { id: string; email: string; displayName: string }
   } | null
 }
@@ -181,6 +183,8 @@ type EventItem = {
   endTime?: string | null
   location: string
   note?: string | null
+  maxPlayers?: number | null
+  maxGoalies?: number | null
   viewerCanSetAttendanceForOthers: boolean
   viewerCanViewLogs: boolean
   team: { id: string; name: string }
@@ -244,6 +248,18 @@ function statusColor(status: ParticipantStatus | null): string {
   if (status === 'MAYBE') return 'warning'
   if (status === 'DECLINED') return 'negative'
   return 'grey-7'
+}
+
+function attendanceSummary(value: EventItem): string {
+  const goingPlayers = value.participants.filter(
+    (p) => p.status === 'GOING' && p.membership?.playerRole === 'PLAYER'
+  ).length
+  const goingGoalies = value.participants.filter(
+    (p) => p.status === 'GOING' && p.membership?.playerRole === 'GOALKEEPER'
+  ).length
+  const maxPlayers = value.maxPlayers != null ? String(value.maxPlayers) : '-'
+  const maxGoalies = value.maxGoalies != null ? String(value.maxGoalies) : '-'
+  return `${t('event.signedSummary')} ${goingPlayers}/${maxPlayers} + ${goingGoalies}/${maxGoalies} ${t('event.goalies')}`
 }
 
 function eventTypeLabel(eventType: string): string {
@@ -314,6 +330,8 @@ async function loadEvent() {
           endTime
           location
           note
+          maxPlayers
+          maxGoalies
           viewerCanSetAttendanceForOthers
           viewerCanViewLogs
           team { id name }
@@ -329,6 +347,7 @@ async function loadEvent() {
             substituteName
             membership {
               id
+              playerRole
               user { id email displayName }
             }
           }

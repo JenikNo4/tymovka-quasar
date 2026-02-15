@@ -47,6 +47,14 @@ export default {
     declineSuccess: 'Pozvánka byla odmítnuta.',
     actionFailed: 'Akce nad pozvánkou selhala',
     teamInviteTitle: 'Pozvání do týmu',
+    ok: 'OK',
+    resolvedAt: 'Vyřešeno: {resolution} ({date})',
+    resolution: {
+      ACCEPTED: 'přijato',
+      DECLINED: 'odmítnuto',
+      DISMISSED: 'potvrzeno',
+      AUTO_RESOLVED: 'automaticky vyřešeno',
+    },
   },
 
   profile: {
@@ -160,6 +168,8 @@ export default {
     myAttendance: 'Moje účast',
     participantManagement: 'Správa účasti členů',
     participantsList: 'Seznam účastníků',
+    signedSummary: 'Přihlášeno',
+    goalies: 'gólmani',
     addParticipants: 'Přidat účastníky',
     selectMembers: 'Vyber členy',
     add: 'Přidat',
