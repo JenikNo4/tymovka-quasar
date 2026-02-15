@@ -29,18 +29,14 @@ const googleLoginUrl = `${import.meta.env.VITE_API_BASE_URL}/oauth2/authorizatio
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from 'src/stores/useAuth'
-import { apiGet } from 'src/utils/api'
 
 const auth = useAuth()
 const router = useRouter()
 
 onMounted(async () => {
-  try {
-    const me = await apiGet<{ id: string; email: string; name?: string }>('/api/user')
-    auth.setUser(me)
+  await auth.fetchMe()                 // zavolá /api/me a nastaví auth.user uvnitř storu
+  if (auth.isLogged) {
     await router.push({ name: 'dashboard' })
-  } catch {
-    // nejsem přihlášen – zůstanu na Welcome
   }
 })
 // Příklad pro alternativní navigaci bez href:
