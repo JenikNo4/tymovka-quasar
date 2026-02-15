@@ -20,12 +20,33 @@ export default {
     profile: 'Můj profil',
     myTeams: 'Moje týmy',
     myEvents: 'Moje události',
+    notifications: 'Notifikace',
     admin: 'Administrace',
     login: 'Přihlásit',
     logout: 'Odhlásit',
     language: 'Jazyk',
     languageCzech: 'Čeština',
     languageEnglish: 'English',
+  },
+
+  dashboard: {
+    teamInviteBanner: 'Máš {count} čekajících pozvánek do týmu.',
+    openNotifications: 'Otevřít notifikace',
+  },
+
+  notifications: {
+    title: 'Notifikace',
+    empty: 'Zatím nemáš žádné notifikace.',
+    markAllRead: 'Označit vše jako přečtené',
+    markAllReadSuccess: 'Notifikace byly označeny jako přečtené.',
+    loadFailed: 'Načtení notifikací selhalo',
+    markReadFailed: 'Označení notifikací selhalo',
+    acceptInvite: 'Přijmout pozvánku',
+    declineInvite: 'Odmítnout pozvánku',
+    acceptSuccess: 'Pozvánka byla přijata.',
+    declineSuccess: 'Pozvánka byla odmítnuta.',
+    actionFailed: 'Akce nad pozvánkou selhala',
+    teamInviteTitle: 'Pozvání do týmu',
   },
 
   profile: {
@@ -163,6 +184,19 @@ export default {
     addParticipantsFailed: 'Přidání účastníků selhalo',
     removeParticipantSuccess: 'Účastník byl odebrán.',
     removeParticipantFailed: 'Odebrání účastníka selhalo',
+    activityLogTitle: 'Historie změn',
+    noActivityLogs: 'Zatím nejsou dostupné žádné záznamy.',
+    logAction: {
+      CREATED: 'Událost vytvořena',
+      UPDATED: 'Událost upravena',
+      DELETED: 'Událost smazána',
+      INVITED: 'Pozvánky upraveny',
+      UNINVITED: 'Účastník odebrán',
+      JOINED: 'Uživatel se přihlásil',
+      LEFT: 'Uživatel se odhlásil',
+      ADMIN_SET: 'Admin změnil účast',
+      REMINDER_SENT: 'Odeslána připomínka',
+    },
     typeLabel: {
       TRAINING: 'Trénink',
       MATCH: 'Zápas',

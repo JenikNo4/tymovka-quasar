@@ -23,12 +23,33 @@ export default {
     profile: 'My Profile',
     myTeams: 'My Teams',
     myEvents: 'My Events',
+    notifications: 'Notifications',
     admin: 'Administration',
     login: 'Login',
     logout: 'Logout',
     language: 'Language',
     languageCzech: 'Čeština',
     languageEnglish: 'English',
+  },
+
+  dashboard: {
+    teamInviteBanner: 'You have {count} pending team invites.',
+    openNotifications: 'Open notifications',
+  },
+
+  notifications: {
+    title: 'Notifications',
+    empty: 'You have no notifications yet.',
+    markAllRead: 'Mark all as read',
+    markAllReadSuccess: 'Notifications were marked as read.',
+    loadFailed: 'Loading notifications failed',
+    markReadFailed: 'Marking notifications as read failed',
+    acceptInvite: 'Accept invite',
+    declineInvite: 'Decline invite',
+    acceptSuccess: 'Invite was accepted.',
+    declineSuccess: 'Invite was declined.',
+    actionFailed: 'Invite action failed',
+    teamInviteTitle: 'Team invite',
   },
 
   profile: {
@@ -166,6 +187,19 @@ export default {
     addParticipantsFailed: 'Adding participants failed',
     removeParticipantSuccess: 'Participant removed.',
     removeParticipantFailed: 'Removing participant failed',
+    activityLogTitle: 'Activity log',
+    noActivityLogs: 'No activity records available yet.',
+    logAction: {
+      CREATED: 'Event created',
+      UPDATED: 'Event updated',
+      DELETED: 'Event deleted',
+      INVITED: 'Invitations updated',
+      UNINVITED: 'Participant removed',
+      JOINED: 'User joined',
+      LEFT: 'User left',
+      ADMIN_SET: 'Admin changed attendance',
+      REMINDER_SENT: 'Reminder sent',
+    },
     typeLabel: {
       TRAINING: 'Training',
       MATCH: 'Match',
