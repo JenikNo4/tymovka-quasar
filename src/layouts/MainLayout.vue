@@ -14,6 +14,7 @@
           <q-route-tab name="profile" :label="t('layout.profile')" :to="{ name: 'profile' }" />
           <q-route-tab name="myTeams" :label="t('layout.myTeams')" :to="{ name: 'myTeams' }" />
           <q-route-tab name="myEvents" :label="t('layout.myEvents')" :to="{ name: 'myEvents' }" />
+          <q-route-tab name="notifications" :label="t('layout.notifications')" :to="{ name: 'notifications' }" />
           <q-route-tab
             v-if="auth.isAdmin"
             name="admin"

@@ -103,6 +103,24 @@
           </q-item>
         </q-list>
       </q-card-section>
+
+      <q-card-section v-if="event.viewerCanViewLogs">
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.activityLogTitle') }}</div>
+        <q-list v-if="event.logs.length" bordered separator>
+          <q-item v-for="log in event.logs" :key="log.id">
+            <q-item-section>
+              <q-item-label>{{ logActionLabel(log.action) }}</q-item-label>
+              <q-item-label caption>{{ log.message || '-' }}</q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-item-label caption>{{ formatDateTime(log.createdAt) }}</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+        <div v-else class="text-caption text-grey-7">
+          {{ t('event.noActivityLogs') }}
+        </div>
+      </q-card-section>
     </q-card>
   </q-page>
 </template>
@@ -125,6 +143,12 @@ type EventParticipant = {
     user: { id: string; email: string; displayName: string }
   } | null
 }
+type EventLogItem = {
+  id: string
+  action: string
+  message?: string | null
+  createdAt: string
+}
 type EventItem = {
   id: string
   title: string
@@ -134,8 +158,10 @@ type EventItem = {
   location: string
   note?: string | null
   viewerCanSetAttendanceForOthers: boolean
+  viewerCanViewLogs: boolean
   team: { id: string; name: string }
   participants: EventParticipant[]
+  logs: EventLogItem[]
 }
 type TeamMembershipOption = { membershipId: string; label: string }
 
@@ -202,6 +228,12 @@ function formatDateTime(iso: string): string {
   return dt.toLocaleString('cs-CZ')
 }
 
+function logActionLabel(action: string): string {
+  const key = `event.logAction.${action}`
+  const translated = t(key)
+  return translated === key ? action : translated
+}
+
 const myParticipant = computed(() => {
   const value = event.value
   const email = auth.user?.email
@@ -252,7 +284,14 @@ async function loadEvent() {
           location
           note
           viewerCanSetAttendanceForOthers
+          viewerCanViewLogs
           team { id name }
+          logs {
+            id
+            action
+            message
+            createdAt
+          }
           participants {
             id
             status
@@ -375,4 +414,3 @@ onMounted(async () => {
   await loadEvent()
 })
 </script>
-

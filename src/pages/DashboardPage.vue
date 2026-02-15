@@ -3,6 +3,18 @@
   <q-page padding>
     <div class="text-h4 q-mb-lg">Dashboard</div>
 
+    <q-banner
+      v-if="teamInviteCount > 0"
+      inline-actions
+      rounded
+      class="bg-orange-1 text-orange-10 q-mb-lg"
+    >
+      {{ t('dashboard.teamInviteBanner', { count: teamInviteCount }) }}
+      <template #action>
+        <q-btn flat color="primary" :label="t('dashboard.openNotifications')" :to="{ name: 'notifications' }" />
+      </template>
+    </q-banner>
+
     <div class="row q-gutter-md">
       <!-- Přehled týmů -->
       <div class="col-12 col-md-6">
@@ -79,7 +91,40 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuth } from 'src/stores/useAuth'
 
+type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
+
 const auth = useAuth()
+const { t } = useI18n()
+const teamInviteCount = ref(0)
+
+async function loadTeamInviteCount() {
+  if (!auth.meLoaded) {
+    await auth.fetchMe()
+  }
+  if (!auth.isLogged) return
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      query: `
+        query {
+          unreadTeamInviteCount
+        }
+      `,
+    }),
+  })
+  if (!response.ok) return
+  const json: GraphQlResponse<{ unreadTeamInviteCount: number }> = await response.json()
+  if (json.errors?.length) return
+  teamInviteCount.value = json.data?.unreadTeamInviteCount ?? 0
+}
+
+onMounted(() => {
+  void loadTeamInviteCount()
+})
 </script>
