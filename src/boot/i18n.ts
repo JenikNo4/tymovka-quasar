@@ -22,8 +22,13 @@ declare module 'vue-i18n' {
 /* eslint-enable @typescript-eslint/no-empty-object-type */
 
 export default defineBoot(({ app }) => {
+  const savedLocale = localStorage.getItem('tymovka.locale');
+  const initialLocale: MessageLanguages =
+    savedLocale === 'cs-CZ' || savedLocale === 'en-US' ? savedLocale : 'cs-CZ';
+
   const i18n = createI18n<{ message: MessageSchema }, MessageLanguages>({
-    locale: 'en-US',
+    locale: initialLocale,
+    fallbackLocale: 'en-US',
     legacy: false,
     messages,
   });

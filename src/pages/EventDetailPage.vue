@@ -1,0 +1,378 @@
+<template>
+  <q-page padding>
+    <div class="row items-center justify-between q-mb-md">
+      <div class="row items-center q-gutter-sm">
+        <q-btn flat icon="arrow_back" :label="t('teamDetail.back')" @click="goBack" />
+        <div class="text-h5">{{ event?.title || t('event.eventDetailTitle') }}</div>
+      </div>
+    </div>
+
+    <q-banner v-if="errorMessage" class="bg-red-1 text-red-9 q-mb-md">
+      {{ errorMessage }}
+    </q-banner>
+
+    <q-inner-loading :showing="loading">
+      <q-spinner color="primary" size="40px" />
+    </q-inner-loading>
+
+    <q-card v-if="event" bordered flat>
+      <q-card-section>
+        <div class="text-subtitle1">{{ event.team.name }} | {{ eventTypeLabel(event.eventType) }}</div>
+        <div class="text-caption text-grey-7">{{ formatDateTime(event.startTime) }}</div>
+      </q-card-section>
+      <q-separator />
+      <q-card-section>
+        <div class="q-mb-sm"><b>{{ t('event.placeLabel') }}:</b> {{ event.location }}</div>
+        <div class="q-mb-sm"><b>{{ t('event.noteLabel') }}:</b> {{ event.note || '-' }}</div>
+      </q-card-section>
+
+      <q-card-section v-if="myParticipant">
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.myAttendance') }}</div>
+        <div class="row q-gutter-sm">
+          <q-btn
+            v-for="status in participantStatuses"
+            :key="status"
+            :label="statusLabel(status)"
+            :color="myParticipant.status === status ? 'primary' : 'grey-7'"
+            :outline="myParticipant.status !== status"
+            :disable="isPastEvent(event)"
+            :loading="attendanceLoading === status"
+            @click="setMyAttendance(status)"
+          />
+        </div>
+      </q-card-section>
+
+      <q-card-section v-if="event.viewerCanSetAttendanceForOthers">
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.addParticipants') }}</div>
+        <div class="row q-gutter-sm items-center q-mb-md">
+          <div class="col-12 col-md-8">
+            <q-select
+              v-model="addMembershipIds"
+              :options="addableMemberOptions"
+              option-value="membershipId"
+              option-label="label"
+              emit-value
+              map-options
+              multiple
+              use-chips
+              outlined
+              dense
+              :disable="isPastEvent(event)"
+              :label="t('event.selectMembers')"
+            />
+          </div>
+          <div class="col-12 col-md-auto">
+            <q-btn color="primary" :label="t('event.add')" :disable="isPastEvent(event)" :loading="addParticipantsLoading" @click="addParticipants" />
+          </div>
+        </div>
+
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.participantManagement') }}</div>
+        <q-list bordered separator>
+          <q-item v-for="p in event.participants" :key="p.id">
+            <q-item-section>
+              <q-item-label>{{ p.membership?.user.displayName || t('common.unknownMember') }}</q-item-label>
+              <q-item-label caption>
+                {{ p.membership?.user.email || '-' }} | {{ t('teamDetail.statusLabel') }}: {{ statusLabel(p.status) }}
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <div class="row q-gutter-xs">
+                <q-btn
+                  v-if="p.membership?.id"
+                  dense
+                  flat
+                  color="negative"
+                  :label="t('teamDetail.remove')"
+                  :disable="isPastEvent(event)"
+                  :loading="attendanceLoading === `remove:${p.membership?.id}`"
+                  @click="removeParticipantFromEvent(p.membership?.id)"
+                />
+                <q-btn
+                  v-for="status in participantStatuses"
+                  :key="`${p.id}-${status}`"
+                  dense
+                  flat
+                  :color="p.status === status ? 'primary' : 'grey-7'"
+                  :label="statusLabel(status)"
+                  :disable="isPastEvent(event)"
+                  :loading="attendanceLoading === `${p.membership?.id}:${status}`"
+                  @click="setAttendanceForMember(p.membership?.id, status)"
+                />
+              </div>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+    </q-card>
+  </q-page>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useAuth } from 'src/stores/useAuth'
+import { useQuasar } from 'quasar'
+import { useI18n } from 'vue-i18n'
+
+type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
+type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'DECLINED'
+type EventParticipant = {
+  id: string
+  status: ParticipantStatus
+  substituteName?: string | null
+  membership?: {
+    id: string
+    user: { id: string; email: string; displayName: string }
+  } | null
+}
+type EventItem = {
+  id: string
+  title: string
+  eventType: string
+  startTime: string
+  endTime?: string | null
+  location: string
+  note?: string | null
+  viewerCanSetAttendanceForOthers: boolean
+  team: { id: string; name: string }
+  participants: EventParticipant[]
+}
+type TeamMembershipOption = { membershipId: string; label: string }
+
+const route = useRoute()
+const router = useRouter()
+const auth = useAuth()
+const $q = useQuasar()
+const { t } = useI18n()
+
+const eventId = String(route.params.id ?? '')
+const loading = ref(false)
+const errorMessage = ref('')
+const event = ref<EventItem | null>(null)
+const attendanceLoading = ref('')
+const addParticipantsLoading = ref(false)
+const detailMemberOptions = ref<TeamMembershipOption[]>([])
+const addMembershipIds = ref<string[]>([])
+const participantStatuses: ParticipantStatus[] = ['INVITED', 'GOING', 'MAYBE', 'DECLINED']
+
+async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ query, variables }),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  const json: GraphQlResponse<T> = await response.json()
+  if (json.errors?.length) throw new Error(json.errors[0]?.message || 'GraphQL error')
+  if (!json.data) throw new Error('Empty GraphQL response')
+  return json.data
+}
+
+function goBack() {
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+  void router.push({ name: 'myEvents' })
+}
+
+function isPastEvent(value: EventItem | null): boolean {
+  if (!value) return false
+  const dt = new Date(value.startTime)
+  if (Number.isNaN(dt.getTime())) return false
+  return dt.getTime() < Date.now()
+}
+
+function statusLabel(status: ParticipantStatus | null): string {
+  if (!status) return t('event.noStatus')
+  return t(`event.statusLabel.${status}`)
+}
+
+function eventTypeLabel(eventType: string): string {
+  if (eventType === 'TRAINING' || eventType === 'MATCH' || eventType === 'OTHER') {
+    return t(`event.typeLabel.${eventType}`)
+  }
+  return eventType
+}
+
+function formatDateTime(iso: string): string {
+  const dt = new Date(iso)
+  if (Number.isNaN(dt.getTime())) return iso
+  return dt.toLocaleString('cs-CZ')
+}
+
+const myParticipant = computed(() => {
+  const value = event.value
+  const email = auth.user?.email
+  if (!value || !email) return null
+  return value.participants.find((p) => p.membership?.user.email === email) || null
+})
+
+const addableMemberOptions = computed(() => {
+  const value = event.value
+  if (!value) return []
+  const existingMembershipIds = new Set(
+    value.participants.map((p) => p.membership?.id).filter((v): v is string => Boolean(v))
+  )
+  return detailMemberOptions.value.filter((o) => !existingMembershipIds.has(o.membershipId))
+})
+
+async function loadTeamMemberOptions(teamId: string) {
+  const data = await gqlRequest<{ teamMembers: Array<{ id: string; user: { displayName: string; email: string } }> }>(
+    `
+    query($teamId: ID!) {
+      teamMembers(teamId: $teamId) {
+        id
+        user { displayName email }
+      }
+    }
+    `,
+    { teamId }
+  )
+  detailMemberOptions.value = data.teamMembers.map((m) => ({
+    membershipId: m.id,
+    label: `${m.user.displayName} (${m.user.email})`,
+  }))
+}
+
+async function loadEvent() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const data = await gqlRequest<{ event: EventItem | null }>(
+      `
+      query($eventId: ID!) {
+        event(eventId: $eventId) {
+          id
+          title
+          eventType
+          startTime
+          endTime
+          location
+          note
+          viewerCanSetAttendanceForOthers
+          team { id name }
+          participants {
+            id
+            status
+            substituteName
+            membership {
+              id
+              user { id email displayName }
+            }
+          }
+        }
+      }
+      `,
+      { eventId }
+    )
+    if (!data.event) throw new Error(t('event.eventNotFound'))
+    event.value = data.event
+    await loadTeamMemberOptions(data.event.team.id)
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : t('event.detailLoadFailed')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function setMyAttendance(status: ParticipantStatus) {
+  const value = event.value
+  if (!value) return
+  attendanceLoading.value = status
+  try {
+    await gqlRequest<{ setMyAttendance: { id: string } }>(
+      `
+      mutation($eventId: ID!, $status: ParticipantStatus!, $substituteName: String) {
+        setMyAttendance(eventId: $eventId, status: $status, substituteName: $substituteName) { id }
+      }
+      `,
+      { eventId: value.id, status, substituteName: null }
+    )
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.attendanceUpdated') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.attendanceUpdateFailed') })
+  } finally {
+    attendanceLoading.value = ''
+  }
+}
+
+async function setAttendanceForMember(membershipId: string | undefined, status: ParticipantStatus) {
+  const value = event.value
+  if (!value || !membershipId) return
+  attendanceLoading.value = `${membershipId}:${status}`
+  try {
+    await gqlRequest<{ adminSetAttendance: { id: string } }>(
+      `
+      mutation($eventId: ID!, $membershipId: ID!, $status: ParticipantStatus!, $substituteName: String) {
+        adminSetAttendance(eventId: $eventId, membershipId: $membershipId, status: $status, substituteName: $substituteName) { id }
+      }
+      `,
+      { eventId: value.id, membershipId, status, substituteName: null }
+    )
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.memberAttendanceUpdated') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.attendanceUpdateFailed') })
+  } finally {
+    attendanceLoading.value = ''
+  }
+}
+
+async function addParticipants() {
+  const value = event.value
+  if (!value || !addMembershipIds.value.length) return
+  addParticipantsLoading.value = true
+  try {
+    await gqlRequest<{ addParticipants: { id: string } }>(
+      `
+      mutation($eventId: ID!, $membershipIds: [ID!]!) {
+        addParticipants(eventId: $eventId, membershipIds: $membershipIds) { id }
+      }
+      `,
+      { eventId: value.id, membershipIds: addMembershipIds.value }
+    )
+    addMembershipIds.value = []
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.addParticipantsSuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.addParticipantsFailed') })
+  } finally {
+    addParticipantsLoading.value = false
+  }
+}
+
+async function removeParticipantFromEvent(membershipId: string | undefined) {
+  const value = event.value
+  if (!value || !membershipId) return
+  attendanceLoading.value = `remove:${membershipId}`
+  try {
+    await gqlRequest<{ removeParticipant: { id: string } }>(
+      `
+      mutation($eventId: ID!, $membershipId: ID!) {
+        removeParticipant(eventId: $eventId, membershipId: $membershipId) { id }
+      }
+      `,
+      { eventId: value.id, membershipId }
+    )
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.removeParticipantSuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.removeParticipantFailed') })
+  } finally {
+    attendanceLoading.value = ''
+  }
+}
+
+onMounted(async () => {
+  if (!eventId) {
+    await router.replace({ name: 'myEvents' })
+    return
+  }
+  if (!auth.meLoaded) await auth.fetchMe()
+  await loadEvent()
+})
+</script>
+

@@ -1,13 +1,23 @@
 import { defineStore } from 'pinia'
-import { apiGet } from 'src/utils/api'
 
 // Minimální typy pro to, co potřebuje header & menu
-type TeamMini = { id: string; name: string; isAdmin: boolean; viewerCanManage: boolean }
+type TeamMini = {
+  id: string
+  name: string
+  description?: string | null
+  isAdmin: boolean
+  viewerCanManage: boolean
+  viewerCanInvite: boolean
+  viewerCanDelete: boolean
+  viewerCanLeave: boolean
+}
 type User = {
   email: string
   firstName: string
   lastName: string
-  nickname?: string | null
+  nickname: string | null
+  preferredLanguage: 'cs-CZ' | 'en-US' | null
+  preferredPositions: string[]
   roles: 'USER' | 'ADMIN' | 'SUPER_ADMIN'
   teams: TeamMini[]
 }
@@ -38,11 +48,18 @@ export const useAuth = defineStore('auth', {
               lastName
               email
               nickname
+              preferredLanguage
+              preferredPositions
               roles
               teams {
                 id
                 name
+                description
+                isAdmin
                 viewerCanManage
+                viewerCanInvite
+                viewerCanDelete
+                viewerCanLeave
               }
             }
           }
@@ -69,13 +86,22 @@ export const useAuth = defineStore('auth', {
         } else if (result.data?.loggedUser) {
           // Mapování z GraphQL response na naší User type
           const userData = result.data.loggedUser
+          const preferredLanguage =
+            userData.preferredLanguage === 'cs-CZ' || userData.preferredLanguage === 'en-US'
+              ? userData.preferredLanguage
+              : null
           this.user = {
             ...userData,
-            roles: userData.roles, // GraphQL vrací 'roles', my očekáváme 'role'
-            teams: userData.teams.map(team => ({
-              ...team,
-              isAdmin: team.viewerCanManage // dočasné mapování
-            }))
+            nickname: userData.nickname ?? null,
+            preferredLanguage,
+            preferredPositions: Array.isArray(userData.preferredPositions)
+              ? userData.preferredPositions
+              : ['PLAYER'],
+            roles: userData.roles,
+            teams: userData.teams,
+          }
+          if (preferredLanguage) {
+            localStorage.setItem('tymovka.locale', preferredLanguage)
           }
         } else {
           this.user = null
@@ -99,6 +125,158 @@ export const useAuth = defineStore('auth', {
       }
       this.user = null
       this.meLoaded = false
+    },
+
+    async refreshMe() {
+      this.meLoaded = false
+      await this.fetchMe()
+    },
+
+    async updatePreferredLanguage(language: 'cs-CZ' | 'en-US') {
+      if (!this.user) return
+
+      const previous = this.user.preferredLanguage
+      this.user.preferredLanguage = language
+
+      try {
+        const mutation = `
+          mutation($preferredLanguage: String) {
+            updateProfile(preferredLanguage: $preferredLanguage) {
+              preferredLanguage
+            }
+          }
+        `
+
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            query: mutation,
+            variables: { preferredLanguage: language },
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result: GraphQlResponse<{ updateProfile: { preferredLanguage?: string | null } }> =
+          await response.json()
+        if (result.errors) {
+          throw new Error(result.errors[0]?.message || 'Failed to update preferred language')
+        }
+
+        const saved = result.data?.updateProfile?.preferredLanguage
+        if (saved === 'cs-CZ' || saved === 'en-US') {
+          this.user.preferredLanguage = saved
+          localStorage.setItem('tymovka.locale', saved)
+        }
+      } catch (error) {
+        this.user.preferredLanguage = previous
+        throw error
+      }
+    },
+
+    async updateProfile(input: {
+      firstName?: string | null
+      lastName?: string | null
+      nickname?: string | null
+      preferredPositions?: string[]
+    }) {
+      if (!this.user) return
+      const previousFirstName = this.user.firstName
+      const previousLastName = this.user.lastName
+      const previousNickname = this.user.nickname
+      const previousPositions = [...(this.user.preferredPositions ?? [])]
+
+      if (Object.prototype.hasOwnProperty.call(input, 'firstName')) {
+        this.user.firstName = input.firstName ?? ''
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'lastName')) {
+        this.user.lastName = input.lastName ?? ''
+      }
+      if (Object.prototype.hasOwnProperty.call(input, 'nickname')) {
+        this.user.nickname = input.nickname ?? null
+      }
+      if (Array.isArray(input.preferredPositions)) {
+        this.user.preferredPositions = input.preferredPositions
+      }
+
+      try {
+        const mutation = `
+          mutation(
+            $firstName: String
+            $lastName: String
+            $nickname: String
+            $preferredPositions: [PreferredPosition!]
+          ) {
+            updateProfile(
+              firstName: $firstName
+              lastName: $lastName
+              nickname: $nickname
+              preferredPositions: $preferredPositions
+            ) {
+              firstName
+              lastName
+              nickname
+              preferredPositions
+            }
+          }
+        `
+
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            query: mutation,
+            variables: {
+              firstName: input.firstName,
+              lastName: input.lastName,
+              nickname: input.nickname,
+              preferredPositions: input.preferredPositions,
+            },
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result: GraphQlResponse<{
+          updateProfile: {
+            firstName?: string | null
+            lastName?: string | null
+            nickname?: string | null
+            preferredPositions?: string[] | null
+          }
+        }> = await response.json()
+
+        if (result.errors) {
+          throw new Error(result.errors[0]?.message || 'Failed to update profile')
+        }
+
+        const saved = result.data?.updateProfile
+        if (saved) {
+          this.user.firstName = saved.firstName ?? ''
+          this.user.lastName = saved.lastName ?? ''
+          this.user.nickname = saved.nickname ?? null
+          this.user.preferredPositions = Array.isArray(saved.preferredPositions)
+            ? saved.preferredPositions
+            : ['PLAYER']
+        }
+      } catch (error) {
+        this.user.firstName = previousFirstName
+        this.user.lastName = previousLastName
+        this.user.nickname = previousNickname
+        this.user.preferredPositions = previousPositions
+        throw error
+      }
     },
 
     loginWithGoogle() {
