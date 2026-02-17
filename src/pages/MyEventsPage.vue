@@ -117,7 +117,7 @@ import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
-type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'DECLINED'
+type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'WAITLIST' | 'DECLINED'
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
 type TeamOption = { id: string; name: string; viewerCanManage: boolean; isAdmin: boolean }
 type TeamMembershipOption = { membershipId: string; label: string }
@@ -194,6 +194,7 @@ async function gqlRequest<T>(query: string, variables: Record<string, unknown> =
 function statusColor(status: ParticipantStatus | null): string {
   if (status === 'GOING') return 'positive'
   if (status === 'MAYBE') return 'warning'
+  if (status === 'WAITLIST') return 'deep-orange'
   if (status === 'DECLINED') return 'negative'
   return 'grey-7'
 }

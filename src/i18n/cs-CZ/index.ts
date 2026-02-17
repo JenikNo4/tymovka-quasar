@@ -229,6 +229,7 @@ export default {
       INVITED: 'Pozván',
       GOING: 'Jdu',
       MAYBE: 'Možná',
+      WAITLIST: 'Náhradník',
       DECLINED: 'Nejdu',
     },
   },

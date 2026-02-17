@@ -232,6 +232,7 @@ export default {
       INVITED: 'Invited',
       GOING: 'Going',
       MAYBE: 'Maybe',
+      WAITLIST: 'Waitlist',
       DECLINED: 'Declined',
     },
   },
