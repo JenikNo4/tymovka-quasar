@@ -56,9 +56,9 @@
             map-options
             outlined
             dense
-            :label="t('event.team')"
+            :label="requiredLabel(t('event.team'))"
           />
-          <q-input v-model="createForm.title" outlined dense :label="t('event.title')" />
+          <q-input v-model="createForm.title" outlined dense :label="requiredLabel(t('event.title'))" />
           <q-select
             v-model="createForm.eventType"
             :options="eventTypes"
@@ -67,9 +67,9 @@
             :label="t('event.type')"
             @update:model-value="applyCreateTypeDefaults"
           />
-          <q-input v-model="createForm.startLocal" outlined dense type="datetime-local" :label="t('event.start')" />
+          <q-input v-model="createForm.startLocal" outlined dense type="datetime-local" :label="requiredLabel(t('event.start'))" />
           <q-input v-model="createForm.endLocal" outlined dense type="datetime-local" :label="t('event.endOptional')" />
-          <q-input v-model="createForm.location" outlined dense :label="t('event.location')" />
+          <q-input v-model="createForm.location" outlined dense :label="requiredLabel(t('event.location'))" />
           <q-input v-model="createForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="createForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="createForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
@@ -117,7 +117,7 @@ import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
-type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'DECLINED'
+type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'WAITLIST' | 'DECLINED'
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
 type TeamOption = { id: string; name: string; viewerCanManage: boolean; isAdmin: boolean }
 type TeamMembershipOption = { membershipId: string; label: string }
@@ -194,6 +194,7 @@ async function gqlRequest<T>(query: string, variables: Record<string, unknown> =
 function statusColor(status: ParticipantStatus | null): string {
   if (status === 'GOING') return 'positive'
   if (status === 'MAYBE') return 'warning'
+  if (status === 'WAITLIST') return 'deep-orange'
   if (status === 'DECLINED') return 'negative'
   return 'grey-7'
 }
@@ -214,6 +215,10 @@ function formatDateTime(iso: string): string {
   const dt = new Date(iso)
   if (Number.isNaN(dt.getTime())) return iso
   return dt.toLocaleString('cs-CZ')
+}
+
+function requiredLabel(label: string): string {
+  return `${label} *`
 }
 
 function toIsoOrNull(localValue: string): string | null {

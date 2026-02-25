@@ -29,25 +29,40 @@
           <q-item-label caption class="text-grey-7">
             {{ formatDateTime(n.createdAt) }}
           </q-item-label>
+          <q-item-label v-if="n.resolvedAt" caption class="text-positive">
+            {{ t('notifications.resolvedAt', { date: formatDateTime(n.resolvedAt), resolution: resolutionLabel(n.resolution) }) }}
+          </q-item-label>
         </q-item-section>
         <q-item-section side>
           <div class="row q-gutter-sm">
             <q-btn
               v-if="n.type === 'TEAM_INVITE' && n.teamId"
               dense
-              color="positive"
+              :color="n.actionAvailable ? 'positive' : 'grey-6'"
               :label="t('notifications.acceptInvite')"
+              :disable="!n.actionAvailable || isActionLoading(n.id)"
               :loading="actionLoadingId === `${n.id}:accept`"
               @click="acceptInvite(n.id, n.teamId)"
             />
             <q-btn
               v-if="n.type === 'TEAM_INVITE' && n.teamId"
               dense
-              flat
-              color="negative"
+              :flat="!n.actionAvailable"
+              :color="n.actionAvailable ? 'negative' : 'grey-6'"
               :label="t('notifications.declineInvite')"
+              :disable="!n.actionAvailable || isActionLoading(n.id)"
               :loading="actionLoadingId === `${n.id}:decline`"
               @click="declineInvite(n.id, n.teamId)"
+            />
+            <q-btn
+              v-if="n.type !== 'TEAM_INVITE'"
+              dense
+              flat
+              color="primary"
+              :label="t('notifications.ok')"
+              :disable="!n.actionAvailable || isActionLoading(n.id)"
+              :loading="actionLoadingId === `${n.id}:ok`"
+              @click="ackNotification(n.id)"
             />
           </div>
         </q-item-section>
@@ -69,14 +84,25 @@ import { useI18n } from 'vue-i18n'
 import { useAuth } from 'src/stores/useAuth'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
-type NotificationType = 'TEAM_INVITE'
+type NotificationType =
+  | 'TEAM_INVITE'
+  | 'EVENT_INVITE_MATCH'
+  | 'EVENT_SERIES_INVITE_DIGEST'
+  | 'EVENT_UPDATED'
+  | 'EVENT_UPDATED_EARLIER'
+  | 'EVENT_CANCELED'
+type NotificationResolution = 'ACCEPTED' | 'DECLINED' | 'DISMISSED' | 'AUTO_RESOLVED'
 
 type NotificationItem = {
   id: string
   type: NotificationType
   title: string
   message?: string | null
+  requiresAction: boolean
+  actionAvailable: boolean
   readAt?: string | null
+  resolution?: NotificationResolution | null
+  resolvedAt?: string | null
   createdAt: string
   teamId?: string | null
 }
@@ -110,6 +136,17 @@ function formatDateTime(iso: string): string {
   return dt.toLocaleString('cs-CZ')
 }
 
+function isActionLoading(notificationId: string): boolean {
+  return actionLoadingId.value.startsWith(`${notificationId}:`)
+}
+
+function resolutionLabel(resolution: NotificationResolution | null | undefined): string {
+  if (!resolution) return ''
+  const key = `notifications.resolution.${resolution}`
+  const translated = t(key)
+  return translated === key ? resolution : translated
+}
+
 async function loadNotifications() {
   errorMessage.value = ''
   try {
@@ -121,7 +158,11 @@ async function loadNotifications() {
           type
           title
           message
+          requiresAction
+          actionAvailable
           readAt
+          resolution
+          resolvedAt
           createdAt
           teamId
         }
@@ -160,14 +201,14 @@ async function markAllReadSilently() {
   )
 }
 
-async function markSingleRead(notificationId: string) {
-  await gqlRequest<{ markNotificationsRead: boolean }>(
+async function resolveNotification(notificationId: string, resolution: NotificationResolution) {
+  await gqlRequest<{ resolveNotification: boolean }>(
     `
-    mutation($notificationIds: [ID!]!) {
-      markNotificationsRead(notificationIds: $notificationIds)
+    mutation($notificationId: ID!, $resolution: NotificationResolution!) {
+      resolveNotification(notificationId: $notificationId, resolution: $resolution)
     }
     `,
-    { notificationIds: [notificationId] }
+    { notificationId, resolution }
   )
 }
 
@@ -182,7 +223,7 @@ async function acceptInvite(notificationId: string, teamId: string) {
       `,
       { teamId }
     )
-    await markSingleRead(notificationId)
+    await resolveNotification(notificationId, 'ACCEPTED')
     await loadNotifications()
     await auth.refreshMe()
     $q.notify({ type: 'positive', message: t('notifications.acceptSuccess') })
@@ -207,13 +248,29 @@ async function declineInvite(notificationId: string, teamId: string) {
       `,
       { teamId }
     )
-    await markSingleRead(notificationId)
+    await resolveNotification(notificationId, 'DECLINED')
     await loadNotifications()
     $q.notify({ type: 'positive', message: t('notifications.declineSuccess') })
   } catch (error) {
     $q.notify({
       type: 'negative',
       message: error instanceof Error ? error.message : t('notifications.actionFailed'),
+    })
+  } finally {
+    actionLoadingId.value = ''
+  }
+}
+
+async function ackNotification(notificationId: string) {
+  actionLoadingId.value = `${notificationId}:ok`
+  try {
+    await resolveNotification(notificationId, 'DISMISSED')
+    await loadNotifications()
+    $q.notify({ type: 'positive', message: t('notifications.markAllReadSuccess') })
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: error instanceof Error ? error.message : t('notifications.markReadFailed'),
     })
   } finally {
     actionLoadingId.value = ''

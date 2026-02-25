@@ -19,6 +19,7 @@
       <q-card-section>
         <div class="text-subtitle1">{{ event.team.name }} | {{ eventTypeLabel(event.eventType) }}</div>
         <div class="text-caption text-grey-7">{{ formatDateTime(event.startTime) }}</div>
+        <div class="text-caption text-grey-8 q-mt-xs">{{ attendanceSummary(event) }}</div>
       </q-card-section>
       <q-separator />
       <q-card-section>
@@ -40,6 +41,25 @@
             @click="setMyAttendance(status)"
           />
         </div>
+      </q-card-section>
+
+      <q-card-section v-if="!event.viewerCanSetAttendanceForOthers">
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.participantsList') }}</div>
+        <q-list bordered separator>
+          <q-item v-for="p in event.participants" :key="p.id">
+            <q-item-section>
+              <q-item-label>{{ p.membership?.user.displayName || t('common.unknownMember') }}</q-item-label>
+              <q-item-label caption>
+                {{ p.membership?.user.email || '-' }}
+                <q-badge
+                  class="q-ml-sm"
+                  :color="statusColor(p.status)"
+                  :label="statusLabel(p.status)"
+                />
+              </q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
       </q-card-section>
 
       <q-card-section v-if="event.viewerCanSetAttendanceForOthers">
@@ -72,7 +92,12 @@
             <q-item-section>
               <q-item-label>{{ p.membership?.user.displayName || t('common.unknownMember') }}</q-item-label>
               <q-item-label caption>
-                {{ p.membership?.user.email || '-' }} | {{ t('teamDetail.statusLabel') }}: {{ statusLabel(p.status) }}
+                {{ p.membership?.user.email || '-' }}
+                <q-badge
+                  class="q-ml-sm"
+                  :color="statusColor(p.status)"
+                  :label="statusLabel(p.status)"
+                />
               </q-item-label>
             </q-item-section>
             <q-item-section side>
@@ -133,13 +158,14 @@ import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
-type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'DECLINED'
+type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'WAITLIST' | 'DECLINED'
 type EventParticipant = {
   id: string
   status: ParticipantStatus
   substituteName?: string | null
   membership?: {
     id: string
+    playerRole?: 'PLAYER' | 'GOALKEEPER'
     user: { id: string; email: string; displayName: string }
   } | null
 }
@@ -157,6 +183,8 @@ type EventItem = {
   endTime?: string | null
   location: string
   note?: string | null
+  maxPlayers?: number | null
+  maxGoalies?: number | null
   viewerCanSetAttendanceForOthers: boolean
   viewerCanViewLogs: boolean
   team: { id: string; name: string }
@@ -213,6 +241,26 @@ function isPastEvent(value: EventItem | null): boolean {
 function statusLabel(status: ParticipantStatus | null): string {
   if (!status) return t('event.noStatus')
   return t(`event.statusLabel.${status}`)
+}
+
+function statusColor(status: ParticipantStatus | null): string {
+  if (status === 'GOING') return 'positive'
+  if (status === 'MAYBE') return 'warning'
+  if (status === 'WAITLIST') return 'deep-orange'
+  if (status === 'DECLINED') return 'negative'
+  return 'grey-7'
+}
+
+function attendanceSummary(value: EventItem): string {
+  const goingPlayers = value.participants.filter(
+    (p) => p.status === 'GOING' && p.membership?.playerRole === 'PLAYER'
+  ).length
+  const goingGoalies = value.participants.filter(
+    (p) => p.status === 'GOING' && p.membership?.playerRole === 'GOALKEEPER'
+  ).length
+  const maxPlayers = value.maxPlayers != null ? String(value.maxPlayers) : '-'
+  const maxGoalies = value.maxGoalies != null ? String(value.maxGoalies) : '-'
+  return `${t('event.signedSummary')} ${goingPlayers}/${maxPlayers} + ${goingGoalies}/${maxGoalies} ${t('event.goalies')}`
 }
 
 function eventTypeLabel(eventType: string): string {
@@ -283,6 +331,8 @@ async function loadEvent() {
           endTime
           location
           note
+          maxPlayers
+          maxGoalies
           viewerCanSetAttendanceForOthers
           viewerCanViewLogs
           team { id name }
@@ -298,6 +348,7 @@ async function loadEvent() {
             substituteName
             membership {
               id
+              playerRole
               user { id email displayName }
             }
           }
