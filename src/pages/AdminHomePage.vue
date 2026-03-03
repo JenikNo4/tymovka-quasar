@@ -45,6 +45,14 @@
                   <div class="row q-gutter-sm">
                     <q-btn flat color="primary" :label="t('adminHome.manageTeam')" @click="goTeamDetail(team.id)" />
                     <q-btn flat color="primary" :label="t('adminHome.manageEvents')" @click="goTeamEvents(team.id)" />
+                    <q-btn
+                      v-if="team.viewerCanDelete"
+                      flat
+                      color="negative"
+                      :label="t('team.deleteTeam')"
+                      :loading="teamActionLoading[team.id] === 'delete'"
+                      @click="deleteManagedTeam(team.id, team.name)"
+                    />
                   </div>
                 </q-item-section>
               </q-item>
@@ -128,6 +136,67 @@
               </div>
             </q-card-actions>
           </q-card>
+
+          <q-card v-if="auth.isSuperAdmin" bordered flat class="q-mt-md">
+            <q-card-section>
+              <div class="text-subtitle1">{{ t('adminHome.archivedTeamsTitle') }}</div>
+              <div class="text-caption text-grey-7">{{ t('adminHome.archivedTeamsHint') }}</div>
+            </q-card-section>
+            <q-separator />
+            <q-list separator>
+              <q-item v-for="team in archivedTeams" :key="`archived-${team.id}`">
+                <q-item-section>
+                  <q-item-label>{{ team.name }}</q-item-label>
+                  <q-item-label caption>{{ team.description || t('common.noDescription') }}</q-item-label>
+                </q-item-section>
+                <q-item-section side>
+                  <div class="row q-gutter-sm">
+                    <q-btn
+                      flat
+                      color="primary"
+                      :label="t('adminHome.restoreTeam')"
+                      :loading="teamActionLoading[team.id] === 'restore'"
+                      @click="restoreArchivedTeam(team.id, team.name)"
+                    />
+                    <q-btn
+                      flat
+                      color="negative"
+                      :label="t('adminHome.hardDeleteTeam')"
+                      :loading="teamActionLoading[team.id] === 'purge'"
+                      @click="purgeArchivedTeam(team.id, team.name)"
+                    />
+                  </div>
+                </q-item-section>
+              </q-item>
+              <q-item v-if="!archivedTeams.length">
+                <q-item-section>
+                  <q-item-label caption>{{ t('adminHome.noArchivedTeams') }}</q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+            <q-separator />
+            <q-card-actions align="between">
+              <div class="text-caption text-grey-7">
+                {{ t('adminHome.archivedTeamsPageInfo', { page: archivedTeamsPage + 1, totalPages: archivedTeamsTotalPages || 1, total: archivedTeamsTotalElements }) }}
+              </div>
+              <div class="row q-gutter-sm">
+                <q-btn
+                  flat
+                  color="primary"
+                  :label="t('adminHome.prevPage')"
+                  :disable="archivedTeamsPage <= 0 || loading"
+                  @click="prevArchivedTeamsPage"
+                />
+                <q-btn
+                  flat
+                  color="primary"
+                  :label="t('adminHome.nextPage')"
+                  :disable="(archivedTeamsPage + 1) >= archivedTeamsTotalPages || loading"
+                  @click="nextArchivedTeamsPage"
+                />
+              </div>
+            </q-card-actions>
+          </q-card>
         </q-tab-panel>
 
         <q-tab-panel name="players">
@@ -162,7 +231,10 @@
                   <q-item-label caption>{{ u.email }}</q-item-label>
                 </q-item-section>
                 <q-item-section side>
-                  <q-badge color="primary">{{ u.role }}</q-badge>
+                  <div class="row items-center q-gutter-sm">
+                    <q-badge color="primary">{{ u.role }}</q-badge>
+                    <q-btn flat color="primary" :label="t('adminHome.openProfile')" @click="openUserDetail(u.id)" />
+                  </div>
                 </q-item-section>
               </q-item>
               <q-item v-if="!allUsers.length">
@@ -204,6 +276,118 @@
     <q-inner-loading :showing="loading">
       <q-spinner color="primary" size="40px" />
     </q-inner-loading>
+
+    <q-dialog v-model="userDetailDialog">
+      <q-card style="min-width: 480px; max-width: 95vw; width: 760px;">
+        <q-card-section class="row items-center justify-between">
+          <div class="text-h6">{{ t('adminHome.playerProfileTitle') }}</div>
+          <q-btn flat round dense icon="close" v-close-popup />
+        </q-card-section>
+        <q-separator />
+
+        <q-card-section v-if="userDetailLoading" class="row justify-center q-pa-lg">
+          <q-spinner color="primary" size="36px" />
+        </q-card-section>
+
+        <q-card-section v-else-if="selectedUserDetail">
+          <div class="row q-col-gutter-md q-mb-md">
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.nickname') }}</div>
+              <div>{{ selectedUserDetail.nickname || t('common.no') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.email') }}</div>
+              <div>{{ selectedUserDetail.email }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.firstName') }}</div>
+              <div>{{ selectedUserDetail.firstName || t('common.no') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.lastName') }}</div>
+              <div>{{ selectedUserDetail.lastName || t('common.no') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.dateOfBirth') }}</div>
+              <div>{{ selectedUserDetail.dateOfBirth || t('common.no') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.role') }}</div>
+              <div class="row items-center q-gutter-sm">
+                <q-select
+                  v-model="selectedUserRole"
+                  dense
+                  outlined
+                  emit-value
+                  map-options
+                  :options="userRoleOptions"
+                  :disable="userRoleSaving"
+                  style="min-width: 180px"
+                />
+                <q-btn
+                  color="primary"
+                  :label="t('common.save')"
+                  :loading="userRoleSaving"
+                  :disable="!selectedUserRole || selectedUserRole === selectedUserDetail.role"
+                  @click="updateSelectedUserRole"
+                />
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('layout.language') }}</div>
+              <div>{{ selectedUserDetail.preferredLanguage || t('common.no') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('profile.preferredPositions') }}</div>
+              <div>{{ selectedUserDetail.preferredPositions.join(', ') || t('common.no') }}</div>
+            </div>
+          </div>
+
+          <q-separator class="q-mb-md" />
+
+          <div class="text-subtitle1 q-mb-sm">{{ t('adminHome.memberTeamsTitle') }}</div>
+          <q-list bordered separator>
+            <q-item v-for="membership in selectedUserDetail.teams" :key="`${selectedUserDetail.id}-${membership.teamId}`">
+              <q-item-section>
+                <q-item-label>
+                  <q-btn
+                    flat
+                    no-caps
+                    color="primary"
+                    class="q-pa-none"
+                    :label="membership.teamName"
+                    @click="goToTeamFromUserDetail(membership.teamId)"
+                  />
+                </q-item-label>
+                <q-item-label caption>
+                  {{ t('adminHome.memberTeamsMeta', {
+                    status: membership.membershipStatus,
+                    teamRole: membership.teamRole,
+                    playerRole: membership.playerRole,
+                    jerseyNumber: membership.jerseyNumber ?? '-'
+                  }) }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!selectedUserDetail.teams.length">
+              <q-item-section>
+                <q-item-label caption>{{ t('adminHome.noMemberships') }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-card-section>
+
+        <q-card-section v-else>
+          <q-banner class="bg-red-1 text-red-9">
+            {{ t('adminHome.userDetailLoadFailed') }}
+          </q-banner>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat :label="t('common.close')" v-close-popup />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -215,7 +399,7 @@ import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
-type TeamAdminCard = { id: string; name: string; description?: string | null }
+type TeamAdminCard = { id: string; name: string; description?: string | null; viewerCanDelete?: boolean }
 type AdminUserCard = {
   id: string
   email: string
@@ -223,6 +407,20 @@ type AdminUserCard = {
   lastName?: string | null
   nickname?: string | null
   role: string
+}
+type AdminUserMembershipDetail = {
+  teamId: string
+  teamName: string
+  membershipStatus: string
+  teamRole: string
+  playerRole: string
+  jerseyNumber?: number | null
+}
+type AdminUserDetail = AdminUserCard & {
+  dateOfBirth?: string | null
+  preferredLanguage?: string | null
+  preferredPositions: string[]
+  teams: AdminUserMembershipDetail[]
 }
 
 const auth = useAuth()
@@ -236,21 +434,41 @@ const activeTab = ref<'teams' | 'players'>('teams')
 const nameFilter = ref('')
 const usersFilter = ref('')
 const allTeams = ref<TeamAdminCard[]>([])
+const archivedTeams = ref<TeamAdminCard[]>([])
 const allUsers = ref<AdminUserCard[]>([])
 const teamsPage = ref(0)
 const teamsPageSize = ref(25)
 const teamsTotalElements = ref(0)
 const teamsTotalPages = ref(0)
+const archivedTeamsPage = ref(0)
+const archivedTeamsPageSize = ref(25)
+const archivedTeamsTotalElements = ref(0)
+const archivedTeamsTotalPages = ref(0)
 const usersPage = ref(0)
 const usersPageSize = ref(25)
 const usersTotalElements = ref(0)
 const usersTotalPages = ref(0)
-const teamActionLoading = reactive<Record<string, 'delete' | undefined>>({})
+const teamActionLoading = reactive<Record<string, 'delete' | 'restore' | 'purge' | undefined>>({})
+const userDetailDialog = ref(false)
+const userDetailLoading = ref(false)
+const selectedUserDetail = ref<AdminUserDetail | null>(null)
+const selectedUserRole = ref<string | null>(null)
+const userRoleSaving = ref(false)
+const userRoleOptions = [
+  { label: 'USER', value: 'USER' },
+  { label: 'ADMIN', value: 'ADMIN' },
+  { label: 'SUPER_ADMIN', value: 'SUPER_ADMIN' },
+] as const
 
 const manageableTeams = computed(() =>
   (auth.user?.teams ?? [])
     .filter((t) => t.isAdmin || t.viewerCanManage)
-    .map((t) => ({ id: t.id, name: t.name, description: t.description ?? null }))
+    .map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description ?? null,
+      viewerCanDelete: t.viewerCanDelete,
+    }))
 )
 
 async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
@@ -302,6 +520,41 @@ async function loadAllTeams() {
   teamsPageSize.value = data.allTeams.size
 }
 
+async function loadArchivedTeams() {
+  if (!auth.isSuperAdmin) return
+  const data = await gqlRequest<{
+    archivedTeams: {
+      items: TeamAdminCard[]
+      totalElements: number
+      totalPages: number
+      page: number
+      size: number
+    }
+  }>(
+    `
+    query($name: String, $page: Int, $size: Int) {
+      archivedTeams(name: $name, page: $page, size: $size) {
+        items {
+          id
+          name
+          description
+        }
+        totalElements
+        totalPages
+        page
+        size
+      }
+    }
+    `,
+    { name: nameFilter.value?.trim() || null, page: archivedTeamsPage.value, size: archivedTeamsPageSize.value }
+  )
+  archivedTeams.value = data.archivedTeams.items
+  archivedTeamsTotalElements.value = data.archivedTeams.totalElements
+  archivedTeamsTotalPages.value = data.archivedTeams.totalPages
+  archivedTeamsPage.value = data.archivedTeams.page
+  archivedTeamsPageSize.value = data.archivedTeams.size
+}
+
 async function loadAllUsers() {
   if (!auth.isSuperAdmin) return
   const data = await gqlRequest<{
@@ -346,6 +599,7 @@ async function loadAll() {
   try {
     await auth.refreshMe()
     await loadAllTeams()
+    await loadArchivedTeams()
     await loadAllUsers()
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : t('common.operationFailed')
@@ -360,9 +614,105 @@ function userDisplayName(user: AdminUserCard): string {
   return joined || user.email
 }
 
+async function openUserDetail(userId: string) {
+  userDetailDialog.value = true
+  userDetailLoading.value = true
+  selectedUserDetail.value = null
+  try {
+    const data = await gqlRequest<{ adminUserDetail: AdminUserDetail }>(
+      `
+      query($userId: ID!) {
+        adminUserDetail(userId: $userId) {
+          id
+          email
+          firstName
+          lastName
+          nickname
+          dateOfBirth
+          preferredLanguage
+          preferredPositions
+          role
+          teams {
+            teamId
+            teamName
+            membershipStatus
+            teamRole
+            playerRole
+            jerseyNumber
+          }
+        }
+      }
+      `,
+      { userId }
+    )
+    selectedUserDetail.value = data.adminUserDetail
+    selectedUserRole.value = data.adminUserDetail.role
+  } catch (err) {
+    userDetailDialog.value = false
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : t('adminHome.userDetailLoadFailed'),
+    })
+  } finally {
+    userDetailLoading.value = false
+  }
+}
+
+function goToTeamFromUserDetail(teamId: string) {
+  userDetailDialog.value = false
+  void router.push({ name: 'teamDetail', params: { id: teamId } })
+}
+
+async function updateSelectedUserRole() {
+  if (!selectedUserDetail.value || !selectedUserRole.value || selectedUserRole.value === selectedUserDetail.value.role) return
+  userRoleSaving.value = true
+  try {
+    const data = await gqlRequest<{ adminUpdateUserRole: AdminUserDetail }>(
+      `
+      mutation($userId: ID!, $role: UserRole!) {
+        adminUpdateUserRole(userId: $userId, role: $role) {
+          id
+          email
+          firstName
+          lastName
+          nickname
+          dateOfBirth
+          preferredLanguage
+          preferredPositions
+          role
+          teams {
+            teamId
+            teamName
+            membershipStatus
+            teamRole
+            playerRole
+            jerseyNumber
+          }
+        }
+      }
+      `,
+      { userId: selectedUserDetail.value.id, role: selectedUserRole.value }
+    )
+    selectedUserDetail.value = data.adminUpdateUserRole
+    selectedUserRole.value = data.adminUpdateUserRole.role
+    await auth.refreshMe()
+    await loadAllUsers()
+    $q.notify({ type: 'positive', message: t('adminHome.userRoleUpdateSuccess') })
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : t('adminHome.userRoleUpdateFailed'),
+    })
+  } finally {
+    userRoleSaving.value = false
+  }
+}
+
 function applyTeamsSearch() {
   teamsPage.value = 0
+  archivedTeamsPage.value = 0
   void loadAllTeams()
+  void loadArchivedTeams()
 }
 
 function nextTeamsPage() {
@@ -375,6 +725,18 @@ function prevTeamsPage() {
   if (teamsPage.value <= 0) return
   teamsPage.value -= 1
   void loadAllTeams()
+}
+
+function nextArchivedTeamsPage() {
+  if ((archivedTeamsPage.value + 1) >= archivedTeamsTotalPages.value) return
+  archivedTeamsPage.value += 1
+  void loadArchivedTeams()
+}
+
+function prevArchivedTeamsPage() {
+  if (archivedTeamsPage.value <= 0) return
+  archivedTeamsPage.value -= 1
+  void loadArchivedTeams()
 }
 
 function applyUsersSearch() {
@@ -423,6 +785,99 @@ function archiveTeam(teamId: string, teamName: string) {
         if (!data.deleteTeam) throw new Error(t('adminHome.archiveFailed'))
         $q.notify({ type: 'positive', message: t('adminHome.archiveSuccess', { name: teamName }) })
         await loadAllTeams()
+        await loadArchivedTeams()
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('common.operationFailed') })
+      } finally {
+        teamActionLoading[teamId] = undefined
+      }
+    })()
+  })
+}
+
+function restoreArchivedTeam(teamId: string, teamName: string) {
+  $q.dialog({
+    title: t('adminHome.restoreConfirmTitle'),
+    message: t('adminHome.restoreConfirmMessage', { name: teamName }),
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    void (async () => {
+      teamActionLoading[teamId] = 'restore'
+      try {
+        const data = await gqlRequest<{ restoreTeam: boolean }>(
+          `
+          mutation($teamId: ID!) {
+            restoreTeam(teamId: $teamId)
+          }
+          `,
+          { teamId }
+        )
+        if (!data.restoreTeam) throw new Error(t('adminHome.restoreFailed'))
+        $q.notify({ type: 'positive', message: t('adminHome.restoreSuccess', { name: teamName }) })
+        await loadAllTeams()
+        await loadArchivedTeams()
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('common.operationFailed') })
+      } finally {
+        teamActionLoading[teamId] = undefined
+      }
+    })()
+  })
+}
+
+function purgeArchivedTeam(teamId: string, teamName: string) {
+  $q.dialog({
+    title: t('adminHome.hardDeleteConfirmTitle'),
+    message: t('adminHome.hardDeleteConfirmMessage', { name: teamName }),
+    cancel: true,
+    persistent: true,
+    ok: { label: t('adminHome.hardDeleteTeam'), color: 'negative' },
+  }).onOk(() => {
+    void (async () => {
+      teamActionLoading[teamId] = 'purge'
+      try {
+        const data = await gqlRequest<{ purgeTeam: boolean }>(
+          `
+          mutation($teamId: ID!) {
+            purgeTeam(teamId: $teamId)
+          }
+          `,
+          { teamId }
+        )
+        if (!data.purgeTeam) throw new Error(t('adminHome.hardDeleteFailed'))
+        $q.notify({ type: 'positive', message: t('adminHome.hardDeleteSuccess', { name: teamName }) })
+        await loadArchivedTeams()
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('common.operationFailed') })
+      } finally {
+        teamActionLoading[teamId] = undefined
+      }
+    })()
+  })
+}
+
+function deleteManagedTeam(teamId: string, teamName: string) {
+  $q.dialog({
+    title: t('team.deleteConfirmTitle'),
+    message: t('team.deleteConfirmMessage', { name: teamName }),
+    cancel: true,
+    persistent: true,
+  }).onOk(() => {
+    void (async () => {
+      teamActionLoading[teamId] = 'delete'
+      try {
+        const data = await gqlRequest<{ deleteTeam: boolean }>(
+          `
+          mutation($teamId: ID!) {
+            deleteTeam(teamId: $teamId)
+          }
+          `,
+          { teamId }
+        )
+        if (!data.deleteTeam) throw new Error(t('team.deleteFailed'))
+        $q.notify({ type: 'positive', message: t('team.deleteSuccess', { name: teamName }) })
+        await loadAll()
       } catch (err) {
         $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('common.operationFailed') })
       } finally {
