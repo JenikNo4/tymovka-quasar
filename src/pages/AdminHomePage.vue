@@ -233,6 +233,7 @@
                 <q-item-section side>
                   <div class="row items-center q-gutter-sm">
                     <q-badge color="primary">{{ u.role }}</q-badge>
+                    <q-badge :color="u.accountStatus === 'ACTIVE' ? 'positive' : 'negative'">{{ u.accountStatus }}</q-badge>
                     <q-btn flat color="primary" :label="t('adminHome.openProfile')" @click="openUserDetail(u.id)" />
                   </div>
                 </q-item-section>
@@ -338,8 +339,34 @@
               <div>{{ selectedUserDetail.preferredLanguage || t('common.no') }}</div>
             </div>
             <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('adminHome.emailVerification') }}</div>
+              <div>{{ selectedUserDetail.emailVerifiedAt || t('adminHome.emailNotVerified') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
               <div class="text-caption text-grey-7">{{ t('profile.preferredPositions') }}</div>
               <div>{{ selectedUserDetail.preferredPositions.join(', ') || t('common.no') }}</div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="text-caption text-grey-7">{{ t('adminHome.accountStatus') }}</div>
+              <div class="row items-center q-gutter-sm">
+                <q-select
+                  v-model="selectedUserAccountStatus"
+                  dense
+                  outlined
+                  emit-value
+                  map-options
+                  :options="accountStatusOptions"
+                  :disable="userStatusSaving"
+                  style="min-width: 180px"
+                />
+                <q-btn
+                  color="primary"
+                  :label="t('common.save')"
+                  :loading="userStatusSaving"
+                  :disable="!selectedUserAccountStatus || selectedUserAccountStatus === selectedUserDetail.accountStatus"
+                  @click="updateSelectedUserAccountStatus"
+                />
+              </div>
             </div>
           </div>
 
@@ -406,6 +433,8 @@ type AdminUserCard = {
   firstName?: string | null
   lastName?: string | null
   nickname?: string | null
+  emailVerifiedAt?: string | null
+  accountStatus: 'ACTIVE' | 'BLOCKED'
   role: string
 }
 type AdminUserMembershipDetail = {
@@ -453,11 +482,17 @@ const userDetailDialog = ref(false)
 const userDetailLoading = ref(false)
 const selectedUserDetail = ref<AdminUserDetail | null>(null)
 const selectedUserRole = ref<string | null>(null)
+const selectedUserAccountStatus = ref<'ACTIVE' | 'BLOCKED' | null>(null)
 const userRoleSaving = ref(false)
+const userStatusSaving = ref(false)
 const userRoleOptions = [
   { label: 'USER', value: 'USER' },
   { label: 'ADMIN', value: 'ADMIN' },
   { label: 'SUPER_ADMIN', value: 'SUPER_ADMIN' },
+] as const
+const accountStatusOptions = [
+  { label: 'ACTIVE', value: 'ACTIVE' },
+  { label: 'BLOCKED', value: 'BLOCKED' },
 ] as const
 
 const manageableTeams = computed(() =>
@@ -575,6 +610,8 @@ async function loadAllUsers() {
           firstName
           lastName
           nickname
+          emailVerifiedAt
+          accountStatus
           role
         }
         totalElements
@@ -630,6 +667,8 @@ async function openUserDetail(userId: string) {
           nickname
           dateOfBirth
           preferredLanguage
+          emailVerifiedAt
+          accountStatus
           preferredPositions
           role
           teams {
@@ -647,6 +686,7 @@ async function openUserDetail(userId: string) {
     )
     selectedUserDetail.value = data.adminUserDetail
     selectedUserRole.value = data.adminUserDetail.role
+    selectedUserAccountStatus.value = data.adminUserDetail.accountStatus
   } catch (err) {
     userDetailDialog.value = false
     $q.notify({
@@ -678,6 +718,8 @@ async function updateSelectedUserRole() {
           nickname
           dateOfBirth
           preferredLanguage
+          emailVerifiedAt
+          accountStatus
           preferredPositions
           role
           teams {
@@ -705,6 +747,57 @@ async function updateSelectedUserRole() {
     })
   } finally {
     userRoleSaving.value = false
+  }
+}
+
+async function updateSelectedUserAccountStatus() {
+  if (
+    !selectedUserDetail.value ||
+    !selectedUserAccountStatus.value ||
+    selectedUserAccountStatus.value === selectedUserDetail.value.accountStatus
+  ) return
+  userStatusSaving.value = true
+  try {
+    const data = await gqlRequest<{ adminUpdateAccountStatus: AdminUserDetail }>(
+      `
+      mutation($userId: ID!, $status: AccountStatus!) {
+        adminUpdateAccountStatus(userId: $userId, status: $status) {
+          id
+          email
+          firstName
+          lastName
+          nickname
+          dateOfBirth
+          preferredLanguage
+          emailVerifiedAt
+          accountStatus
+          preferredPositions
+          role
+          teams {
+            teamId
+            teamName
+            membershipStatus
+            teamRole
+            playerRole
+            jerseyNumber
+          }
+        }
+      }
+      `,
+      { userId: selectedUserDetail.value.id, status: selectedUserAccountStatus.value }
+    )
+    selectedUserDetail.value = data.adminUpdateAccountStatus
+    selectedUserAccountStatus.value = data.adminUpdateAccountStatus.accountStatus
+    await auth.refreshMe()
+    await loadAllUsers()
+    $q.notify({ type: 'positive', message: t('adminHome.userStatusUpdateSuccess') })
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : t('adminHome.userStatusUpdateFailed'),
+    })
+  } finally {
+    userStatusSaving.value = false
   }
 }
 
