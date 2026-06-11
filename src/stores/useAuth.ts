@@ -24,6 +24,7 @@ type User = {
 }
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
+type EmailAuthResponse = { success: boolean; message: string }
 
 export const useAuth = defineStore('auth', {
   state: () => ({
@@ -296,6 +297,42 @@ export const useAuth = defineStore('auth', {
 
     loginWithGoogle() {
       window.location.href = `${import.meta.env.VITE_API_BASE_URL}/oauth2/authorization/google`
+    },
+
+    async loginWithEmail(email: string, password: string) {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      })
+
+      const payload = await response.json() as EmailAuthResponse
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || `HTTP error! status: ${response.status}`)
+      }
+
+      await this.refreshMe()
+    },
+
+    async registerWithEmail(email: string, password: string, confirmPassword: string) {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email, password, confirmPassword }),
+      })
+
+      const payload = await response.json() as EmailAuthResponse
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || `HTTP error! status: ${response.status}`)
+      }
+
+      await this.refreshMe()
     },
   },
 })

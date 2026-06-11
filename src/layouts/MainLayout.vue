@@ -50,7 +50,7 @@
           <q-btn flat dense icon="logout" :label="t('layout.logout')" @click="doLogout" />
         </div>
         <div v-else>
-          <q-btn flat icon="login" :label="t('layout.login')" @click="auth.loginWithGoogle()" />
+          <q-btn flat icon="login" :label="t('layout.login')" @click="goLogin" />
         </div>
       </q-toolbar>
     </q-header>
@@ -101,6 +101,10 @@ function setLocale(nextLocale: 'cs-CZ' | 'en-US') {
 
 async function doLogout() {
   await auth.logout()
+  void router.push({ name: 'welcome' })
+}
+
+function goLogin() {
   void router.push({ name: 'welcome' })
 }
 
