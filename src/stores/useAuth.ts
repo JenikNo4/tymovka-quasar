@@ -317,7 +317,7 @@ export const useAuth = defineStore('auth', {
       await this.refreshMe()
     },
 
-    async registerWithEmail(email: string, password: string, confirmPassword: string) {
+    async registerWithEmail(email: string, password: string, confirmPassword: string): Promise<EmailAuthResponse> {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/register`, {
         method: 'POST',
         headers: {
@@ -332,7 +332,61 @@ export const useAuth = defineStore('auth', {
         throw new Error(payload.message || `HTTP error! status: ${response.status}`)
       }
 
-      await this.refreshMe()
+      return payload
+    },
+
+    async resendEmailVerification(email: string): Promise<EmailAuthResponse> {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/resend-verification`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email }),
+      })
+
+      const payload = await response.json() as EmailAuthResponse
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || `HTTP error! status: ${response.status}`)
+      }
+
+      return payload
+    },
+
+    async forgotPassword(email: string): Promise<EmailAuthResponse> {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email }),
+      })
+
+      const payload = await response.json() as EmailAuthResponse
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || `HTTP error! status: ${response.status}`)
+      }
+
+      return payload
+    },
+
+    async resetPassword(token: string, password: string, confirmPassword: string): Promise<EmailAuthResponse> {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ token, password, confirmPassword }),
+      })
+
+      const payload = await response.json() as EmailAuthResponse
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || `HTTP error! status: ${response.status}`)
+      }
+
+      return payload
     },
   },
 })

@@ -53,6 +53,24 @@ export default {
     loginFailed: 'Přihlášení selhalo.',
     registerSuccess: 'Registrace proběhla úspěšně.',
     registerFailed: 'Registrace selhala.',
+    registerVerifyEmailSent: 'Registrace byla vytvořena. Zkontroluj e-mail a potvrď registraci odkazem ve zprávě.',
+    emailVerificationSuccess: 'E-mail byl ověřen. Teď se můžeš přihlásit.',
+    emailVerificationFailed: 'Ověření e-mailu se nepovedlo. Odkaz je neplatný nebo expirovaný.',
+    resendVerificationAction: 'Poslat ověřovací e-mail znovu',
+    resendVerificationSuccess: 'Pokud účet existuje a čeká na ověření, poslali jsme nový ověřovací e-mail.',
+    resendVerificationFailed: 'Ověřovací e-mail se nepodařilo odeslat.',
+    forgotPasswordAction: 'Zapomenuté heslo',
+    forgotPasswordSuccess: 'Pokud účet existuje, poslali jsme e-mail pro nastavení nového hesla.',
+    forgotPasswordFailed: 'E-mail pro obnovu hesla se nepodařilo odeslat.',
+  },
+
+  resetPassword: {
+    title: 'Nastavit nové heslo',
+    submit: 'Uložit nové heslo',
+    backToLogin: 'Zpět na přihlášení',
+    success: 'Heslo bylo změněno. Teď se můžeš přihlásit.',
+    failed: 'Heslo se nepodařilo změnit.',
+    missingToken: 'Odkaz pro obnovu hesla je neplatný.',
   },
 
   adminHome: {
