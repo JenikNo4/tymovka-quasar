@@ -31,6 +31,9 @@
         <q-tab-panel name="login">
           <div class="text-subtitle2 q-mb-md">{{ t('welcome.emailLoginTitle') }}</div>
           <div class="q-gutter-md">
+            <q-banner v-if="infoMessage" class="bg-green-1 text-green-9">
+              {{ infoMessage }}
+            </q-banner>
             <q-banner v-if="loginErrorMessage" class="bg-red-1 text-red-9">
               {{ loginErrorMessage }}
             </q-banner>
@@ -67,12 +70,31 @@
               :disable="!canSubmitLogin"
               @click="submitLogin"
             />
+            <q-btn
+              v-if="canResendVerification"
+              flat
+              color="primary"
+              :label="t('welcome.resendVerificationAction')"
+              :loading="submitting"
+              @click="resendVerification"
+            />
+            <q-btn
+              flat
+              color="primary"
+              :label="t('welcome.forgotPasswordAction')"
+              :loading="submitting"
+              :disable="loginForm.email.trim().length === 0"
+              @click="forgotPassword"
+            />
           </div>
         </q-tab-panel>
 
         <q-tab-panel name="register">
           <div class="text-subtitle2 q-mb-md">{{ t('welcome.emailRegisterTitle') }}</div>
           <div class="q-gutter-md">
+            <q-banner v-if="registerSuccessMessage" class="bg-green-1 text-green-9">
+              {{ registerSuccessMessage }}
+            </q-banner>
             <q-banner v-if="registerErrorMessage" class="bg-red-1 text-red-9">
               {{ registerErrorMessage }}
             </q-banner>
@@ -140,7 +162,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from 'src/stores/useAuth'
@@ -149,6 +171,7 @@ const googleLoginUrl = `${import.meta.env.VITE_API_BASE_URL}/oauth2/authorizatio
 
 const auth = useAuth()
 const router = useRouter()
+const route = useRoute()
 const $q = useQuasar()
 const { t } = useI18n()
 
@@ -159,6 +182,9 @@ const showRegisterPassword = ref(false)
 const showRegisterConfirmPassword = ref(false)
 const loginErrorMessage = ref('')
 const registerErrorMessage = ref('')
+const registerSuccessMessage = ref('')
+const infoMessage = ref('')
+const lastVerificationEmail = ref('')
 
 const loginForm = reactive({
   email: '',
@@ -186,6 +212,11 @@ const canSubmitRegister = computed(() =>
   !passwordMismatch.value
 )
 
+const canResendVerification = computed(() =>
+  lastVerificationEmail.value.trim().length > 0 &&
+  loginErrorMessage.value.toLowerCase().includes('not verified')
+)
+
 async function redirectIfLoggedIn() {
   await auth.fetchMe()
   if (auth.isLogged) {
@@ -197,6 +228,7 @@ async function submitLogin() {
   if (!canSubmitLogin.value) return
   loginErrorMessage.value = ''
   registerErrorMessage.value = ''
+  infoMessage.value = ''
   submitting.value = true
   try {
     await auth.loginWithEmail(loginForm.email, loginForm.password)
@@ -206,6 +238,9 @@ async function submitLogin() {
     await router.push({ name: 'dashboard' })
   } catch (error) {
     loginErrorMessage.value = error instanceof Error ? error.message : t('welcome.loginFailed')
+    if (loginErrorMessage.value.toLowerCase().includes('not verified')) {
+      lastVerificationEmail.value = loginForm.email.trim()
+    }
     if (typeof $q.notify === 'function') {
       $q.notify({
         type: 'negative',
@@ -221,13 +256,18 @@ async function submitRegister() {
   if (!canSubmitRegister.value) return
   loginErrorMessage.value = ''
   registerErrorMessage.value = ''
+  registerSuccessMessage.value = ''
+  infoMessage.value = ''
   submitting.value = true
   try {
     await auth.registerWithEmail(registerForm.email, registerForm.password, registerForm.confirmPassword)
+    lastVerificationEmail.value = registerForm.email.trim()
+    registerSuccessMessage.value = t('welcome.registerVerifyEmailSent')
     if (typeof $q.notify === 'function') {
       $q.notify({ type: 'positive', message: t('welcome.registerSuccess') })
     }
-    await router.push({ name: 'dashboard' })
+    activeTab.value = 'login'
+    infoMessage.value = t('welcome.registerVerifyEmailSent')
   } catch (error) {
     registerErrorMessage.value = error instanceof Error ? error.message : t('welcome.registerFailed')
     if (typeof $q.notify === 'function') {
@@ -241,7 +281,44 @@ async function submitRegister() {
   }
 }
 
+async function resendVerification() {
+  if (!lastVerificationEmail.value.trim()) return
+  loginErrorMessage.value = ''
+  infoMessage.value = ''
+  submitting.value = true
+  try {
+    await auth.resendEmailVerification(lastVerificationEmail.value)
+    infoMessage.value = t('welcome.resendVerificationSuccess')
+  } catch (error) {
+    loginErrorMessage.value = error instanceof Error ? error.message : t('welcome.resendVerificationFailed')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function forgotPassword() {
+  if (!loginForm.email.trim()) return
+  loginErrorMessage.value = ''
+  infoMessage.value = ''
+  submitting.value = true
+  try {
+    await auth.forgotPassword(loginForm.email.trim())
+    infoMessage.value = t('welcome.forgotPasswordSuccess')
+  } catch (error) {
+    loginErrorMessage.value = error instanceof Error ? error.message : t('welcome.forgotPasswordFailed')
+  } finally {
+    submitting.value = false
+  }
+}
+
 onMounted(async () => {
+  if (route.query.emailVerified === 'success') {
+    activeTab.value = 'login'
+    infoMessage.value = t('welcome.emailVerificationSuccess')
+  } else if (route.query.emailVerified === 'failed') {
+    activeTab.value = 'login'
+    loginErrorMessage.value = t('welcome.emailVerificationFailed')
+  }
   await redirectIfLoggedIn()
 })
 </script>

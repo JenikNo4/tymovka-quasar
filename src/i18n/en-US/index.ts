@@ -56,6 +56,24 @@ export default {
     loginFailed: 'Login failed.',
     registerSuccess: 'Registration was successful.',
     registerFailed: 'Registration failed.',
+    registerVerifyEmailSent: 'Registration was created. Check your email and confirm it using the link in the message.',
+    emailVerificationSuccess: 'Email was verified. You can sign in now.',
+    emailVerificationFailed: 'Email verification failed. The link is invalid or expired.',
+    resendVerificationAction: 'Send verification email again',
+    resendVerificationSuccess: 'If the account exists and is waiting for verification, we sent a new verification email.',
+    resendVerificationFailed: 'Verification email could not be sent.',
+    forgotPasswordAction: 'Forgot password',
+    forgotPasswordSuccess: 'If the account exists, we sent an email for setting a new password.',
+    forgotPasswordFailed: 'Password reset email could not be sent.',
+  },
+
+  resetPassword: {
+    title: 'Set a new password',
+    submit: 'Save new password',
+    backToLogin: 'Back to login',
+    success: 'Password was changed. You can sign in now.',
+    failed: 'Password could not be changed.',
+    missingToken: 'Password reset link is invalid.',
   },
 
   adminHome: {

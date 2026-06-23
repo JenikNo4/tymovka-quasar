@@ -7,6 +7,7 @@ const routes: RouteRecordRaw[] = [
     children: [
       { path: '', name: 'welcome', component: () => import('pages/WelcomePage.vue') },
       { path: 'auth/callback', name: 'authCallback', component: () => import('pages/AuthCallbackPage.vue') },
+      { path: 'reset-password', name: 'resetPassword', component: () => import('pages/ResetPasswordPage.vue') },
       { path: 'dashboard', name: 'dashboard', component: () => import('pages/DashboardPage.vue') },
       { path: 'profile',    name: 'profile',    component: () => import('pages/ProfilePage.vue'),    meta: { requiresAuth: true } },
       { path: 'my-teams',   name: 'myTeams',    component: () => import('pages/MyTeamsPage.vue'),    meta: { requiresAuth: true } },
