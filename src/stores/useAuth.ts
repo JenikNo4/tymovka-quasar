@@ -26,6 +26,23 @@ type User = {
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type EmailAuthResponse = { success: boolean; message: string }
 
+async function readEmailAuthResponse(response: Response): Promise<EmailAuthResponse> {
+  const raw = await response.text()
+  if (!raw.trim()) {
+    return { success: response.ok, message: response.ok ? 'OK' : `HTTP error! status: ${response.status}` }
+  }
+
+  try {
+    return JSON.parse(raw) as EmailAuthResponse
+  } catch {
+    const preview = raw.replace(/\s+/g, ' ').trim().slice(0, 160)
+    return {
+      success: false,
+      message: `HTTP error! status: ${response.status}. Server returned non-JSON response: ${preview}`,
+    }
+  }
+}
+
 export const useAuth = defineStore('auth', {
   state: () => ({
     user: null as User | null,
@@ -309,7 +326,7 @@ export const useAuth = defineStore('auth', {
         body: JSON.stringify({ email, password }),
       })
 
-      const payload = await response.json() as EmailAuthResponse
+      const payload = await readEmailAuthResponse(response)
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || `HTTP error! status: ${response.status}`)
       }
@@ -327,7 +344,7 @@ export const useAuth = defineStore('auth', {
         body: JSON.stringify({ email, password, confirmPassword }),
       })
 
-      const payload = await response.json() as EmailAuthResponse
+      const payload = await readEmailAuthResponse(response)
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || `HTTP error! status: ${response.status}`)
       }
@@ -345,7 +362,7 @@ export const useAuth = defineStore('auth', {
         body: JSON.stringify({ email }),
       })
 
-      const payload = await response.json() as EmailAuthResponse
+      const payload = await readEmailAuthResponse(response)
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || `HTTP error! status: ${response.status}`)
       }
@@ -363,7 +380,7 @@ export const useAuth = defineStore('auth', {
         body: JSON.stringify({ email }),
       })
 
-      const payload = await response.json() as EmailAuthResponse
+      const payload = await readEmailAuthResponse(response)
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || `HTTP error! status: ${response.status}`)
       }
@@ -381,7 +398,7 @@ export const useAuth = defineStore('auth', {
         body: JSON.stringify({ token, password, confirmPassword }),
       })
 
-      const payload = await response.json() as EmailAuthResponse
+      const payload = await readEmailAuthResponse(response)
       if (!response.ok || !payload.success) {
         throw new Error(payload.message || `HTTP error! status: ${response.status}`)
       }
