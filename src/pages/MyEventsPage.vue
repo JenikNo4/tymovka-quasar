@@ -2,13 +2,16 @@
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
       <div class="text-h5">{{ t('event.myEventsTitle') }}</div>
-      <q-btn
-        color="primary"
-        icon="add"
-        :label="t('event.addEvent')"
-        :disable="!manageableTeams.length"
-        @click="openCreateDialog"
-      />
+      <div class="row items-center q-gutter-sm">
+        <q-toggle v-model="showPastEvents" :label="t('event.showPastEvents')" :disable="loading" />
+        <q-btn
+          color="primary"
+          icon="add"
+          :label="t('event.addEvent')"
+          :disable="!manageableTeams.length"
+          @click="openCreateDialog"
+        />
+      </div>
     </div>
 
     <q-banner v-if="loadError" class="bg-red-1 text-red-9 q-mb-md">
@@ -39,6 +42,28 @@
     <q-banner v-else-if="!loading" class="bg-grey-2 q-pa-md">
       {{ t('event.noEvents') }}
     </q-banner>
+
+    <div class="row items-center justify-between q-mt-md" v-if="events.length || eventsTotalElements > 0">
+      <div class="text-caption text-grey-7">
+        {{ t('event.eventsPageInfo', { page: eventsPage + 1, totalPages: eventsTotalPages || 1, total: eventsTotalElements }) }}
+      </div>
+      <div class="row q-gutter-sm">
+        <q-btn
+          flat
+          color="primary"
+          :label="t('adminHome.prevPage')"
+          :disable="eventsPage <= 0 || loading"
+          @click="prevEventsPage"
+        />
+        <q-btn
+          flat
+          color="primary"
+          :label="t('adminHome.nextPage')"
+          :disable="(eventsPage + 1) >= eventsTotalPages || loading"
+          @click="nextEventsPage"
+        />
+      </div>
+    </div>
 
     <q-dialog v-model="createDialog">
       <q-card style="min-width: 460px; max-width: 96vw;">
@@ -122,16 +147,6 @@ type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
 type TeamOption = { id: string; name: string; viewerCanManage: boolean; isAdmin: boolean }
 type TeamMembershipOption = { membershipId: string; label: string }
 
-type EventParticipant = {
-  id: string
-  status: ParticipantStatus
-  membership?: {
-    user: {
-      email: string
-    }
-  } | null
-}
-
 type EventItem = {
   id: string
   title: string
@@ -140,8 +155,19 @@ type EventItem = {
   endTime?: string | null
   location: string
   team: { id: string; name: string }
-  participants: EventParticipant[]
   myStatus: ParticipantStatus | null
+  playersSigned: number
+  playersCapacity?: number | null
+  goaliesSigned: number
+  goaliesCapacity?: number | null
+}
+
+type EventPage = {
+  items: EventItem[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
 }
 
 const auth = useAuth()
@@ -152,6 +178,11 @@ const router = useRouter()
 const loading = ref(false)
 const loadError = ref('')
 const events = ref<EventItem[]>([])
+const eventsPage = ref(0)
+const eventsPageSize = ref(25)
+const eventsTotalElements = ref(0)
+const eventsTotalPages = ref(0)
+const showPastEvents = ref(false)
 const createDialog = ref(false)
 const createLoading = ref(false)
 const eventTypes: EventType[] = ['TRAINING', 'MATCH', 'OTHER']
@@ -249,13 +280,6 @@ function parseCapacity(rawValue: string): ParsedCapacity {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 0) return INVALID_CAPACITY
   return parsed
-}
-
-function computeMyStatus(event: Omit<EventItem, 'myStatus'>): ParticipantStatus | null {
-  const email = auth.user?.email
-  if (!email) return null
-  const mine = event.participants.find(p => p.membership?.user.email === email)
-  return mine?.status ?? null
 }
 
 function goToEventDetail(eventId: string) {
@@ -401,53 +425,55 @@ async function loadEvents() {
   loadError.value = ''
   try {
     if (!auth.meLoaded) await auth.fetchMe()
-    const teamIds = (auth.user?.teams ?? []).map(t => t.id)
-    if (!teamIds.length) {
-      events.value = []
-      return
-    }
-
-    const responses = await Promise.all(
-      teamIds.map(teamId =>
-        gqlRequest<{ teamEvents: Omit<EventItem, 'myStatus'>[] }>(
-          `
-          query($teamId: ID!) {
-            teamEvents(teamId: $teamId) {
-              id
-              title
-              eventType
-              startTime
-              endTime
-              location
-              team { id name }
-              participants {
-                id
-                status
-                membership {
-                  user { email }
-                }
-              }
-            }
+    const data = await gqlRequest<{ myEvents: EventPage }>(
+      `
+      query($past: Boolean, $page: Int, $size: Int) {
+        myEvents(past: $past, page: $page, size: $size) {
+          items {
+            id
+            title
+            eventType
+            startTime
+            endTime
+            location
+            team { id name }
+            playersSigned
+            playersCapacity
+            goaliesSigned
+            goaliesCapacity
+            myStatus
           }
-          `,
-          { teamId }
-        )
-      )
+          totalElements
+          totalPages
+          page
+          size
+        }
+      }
+      `,
+      { past: showPastEvents.value, page: eventsPage.value, size: eventsPageSize.value }
     )
-
-    const flattened = responses.flatMap(r => r.teamEvents)
-    const dedup = new Map<string, EventItem>()
-    for (const ev of flattened) {
-      dedup.set(ev.id, { ...ev, myStatus: computeMyStatus(ev) })
-    }
-    events.value = Array.from(dedup.values()).sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-    )
+    events.value = data.myEvents.items
+    eventsTotalElements.value = data.myEvents.totalElements
+    eventsTotalPages.value = data.myEvents.totalPages
+    eventsPage.value = data.myEvents.page
+    eventsPageSize.value = data.myEvents.size
   } catch (err) {
     loadError.value = err instanceof Error ? err.message : t('event.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+function nextEventsPage() {
+  if ((eventsPage.value + 1) >= eventsTotalPages.value) return
+  eventsPage.value += 1
+  void loadEvents()
+}
+
+function prevEventsPage() {
+  if (eventsPage.value <= 0) return
+  eventsPage.value -= 1
+  void loadEvents()
 }
 
 watch(
@@ -460,6 +486,11 @@ watch(
     }
   }
 )
+
+watch(showPastEvents, () => {
+  eventsPage.value = 0
+  void loadEvents()
+})
 
 onMounted(async () => {
   await loadEvents()
