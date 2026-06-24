@@ -278,11 +278,11 @@
       <q-spinner color="primary" size="40px" />
     </q-inner-loading>
 
-    <q-dialog v-model="userDetailDialog">
+    <q-dialog ref="userDetailDialogRef" v-model="userDetailDialog" @hide="resetUserDetailState">
       <q-card style="min-width: 480px; max-width: 95vw; width: 760px;">
         <q-card-section class="row items-center justify-between">
           <div class="text-h6">{{ t('adminHome.playerProfileTitle') }}</div>
-          <q-btn flat round dense icon="close" v-close-popup />
+          <q-btn flat round dense icon="close" @click="closeUserDetailDialog" />
         </q-card-section>
         <q-separator />
 
@@ -402,6 +402,44 @@
               </q-item-section>
             </q-item>
           </q-list>
+
+          <q-banner
+            v-if="adminCapabilities.hardDeleteUsersEnabled && userHardDeleteConfirmVisible"
+            class="bg-red-1 text-red-10 q-mt-md"
+            rounded
+          >
+            <div class="text-subtitle2 q-mb-sm">{{ t('adminHome.hardDeleteUserConfirmTitle') }}</div>
+            <div class="q-mb-sm">
+              {{ t('adminHome.hardDeleteUserConfirmMessage', { email: selectedUserDetail.email }) }}
+            </div>
+            <div class="row items-center q-col-gutter-sm">
+              <div class="col-12 col-md">
+                <q-input
+                  v-model="userHardDeleteConfirmEmail"
+                  dense
+                  outlined
+                  color="negative"
+                  :label="t('adminHome.hardDeleteUserConfirmLabel')"
+                  :disable="userHardDeleteSaving"
+                />
+              </div>
+              <div class="col-auto">
+                <q-btn
+                  flat
+                  :label="t('common.cancel')"
+                  :disable="userHardDeleteSaving"
+                  @click="cancelHardDeleteSelectedUser"
+                />
+                <q-btn
+                  color="negative"
+                  :label="t('adminHome.hardDeleteUser')"
+                  :loading="userHardDeleteSaving"
+                  :disable="!canConfirmHardDeleteSelectedUser"
+                  @click="confirmHardDeleteSelectedUser"
+                />
+              </div>
+            </div>
+          </q-banner>
         </q-card-section>
 
         <q-card-section v-else>
@@ -410,8 +448,17 @@
           </q-banner>
         </q-card-section>
 
-        <q-card-actions align="right">
-          <q-btn flat :label="t('common.close')" v-close-popup />
+        <q-card-actions align="between">
+          <q-btn
+            v-if="auth.isSuperAdmin && selectedUserDetail && adminCapabilities.hardDeleteUsersEnabled"
+            flat
+            color="negative"
+            :label="t('adminHome.hardDeleteUser')"
+            :loading="userHardDeleteSaving"
+            :disable="userHardDeleteConfirmVisible"
+            @click="hardDeleteSelectedUser"
+          />
+          <q-btn flat :label="t('common.close')" @click="closeUserDetailDialog" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -465,6 +512,9 @@ const usersFilter = ref('')
 const allTeams = ref<TeamAdminCard[]>([])
 const archivedTeams = ref<TeamAdminCard[]>([])
 const allUsers = ref<AdminUserCard[]>([])
+const adminCapabilities = reactive({
+  hardDeleteUsersEnabled: false,
+})
 const teamsPage = ref(0)
 const teamsPageSize = ref(25)
 const teamsTotalElements = ref(0)
@@ -479,12 +529,16 @@ const usersTotalElements = ref(0)
 const usersTotalPages = ref(0)
 const teamActionLoading = reactive<Record<string, 'delete' | 'restore' | 'purge' | undefined>>({})
 const userDetailDialog = ref(false)
+const userDetailDialogRef = ref<{ hide: () => void } | null>(null)
 const userDetailLoading = ref(false)
 const selectedUserDetail = ref<AdminUserDetail | null>(null)
 const selectedUserRole = ref<string | null>(null)
 const selectedUserAccountStatus = ref<'ACTIVE' | 'BLOCKED' | null>(null)
 const userRoleSaving = ref(false)
 const userStatusSaving = ref(false)
+const userHardDeleteSaving = ref(false)
+const userHardDeleteConfirmVisible = ref(false)
+const userHardDeleteConfirmEmail = ref('')
 const userRoleOptions = [
   { label: 'USER', value: 'USER' },
   { label: 'ADMIN', value: 'ADMIN' },
@@ -505,6 +559,11 @@ const manageableTeams = computed(() =>
       viewerCanDelete: t.viewerCanDelete,
     }))
 )
+
+const canConfirmHardDeleteSelectedUser = computed(() => {
+  const user = selectedUserDetail.value
+  return !!user && userHardDeleteConfirmEmail.value.trim().toLowerCase() === user.email.toLowerCase()
+})
 
 async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
@@ -630,11 +689,29 @@ async function loadAllUsers() {
   usersPageSize.value = data.adminUsers.size
 }
 
+async function loadAdminCapabilities() {
+  if (!auth.isSuperAdmin) {
+    adminCapabilities.hardDeleteUsersEnabled = false
+    return
+  }
+  const data = await gqlRequest<{ adminCapabilities: { hardDeleteUsersEnabled: boolean } }>(
+    `
+    query {
+      adminCapabilities {
+        hardDeleteUsersEnabled
+      }
+    }
+    `
+  )
+  adminCapabilities.hardDeleteUsersEnabled = data.adminCapabilities.hardDeleteUsersEnabled
+}
+
 async function loadAll() {
   loading.value = true
   errorMessage.value = ''
   try {
     await auth.refreshMe()
+    await loadAdminCapabilities()
     await loadAllTeams()
     await loadArchivedTeams()
     await loadAllUsers()
@@ -652,9 +729,9 @@ function userDisplayName(user: AdminUserCard): string {
 }
 
 async function openUserDetail(userId: string) {
+  resetUserDetailState()
   userDetailDialog.value = true
   userDetailLoading.value = true
-  selectedUserDetail.value = null
   try {
     const data = await gqlRequest<{ adminUserDetail: AdminUserDetail }>(
       `
@@ -687,6 +764,8 @@ async function openUserDetail(userId: string) {
     selectedUserDetail.value = data.adminUserDetail
     selectedUserRole.value = data.adminUserDetail.role
     selectedUserAccountStatus.value = data.adminUserDetail.accountStatus
+    userHardDeleteConfirmVisible.value = false
+    userHardDeleteConfirmEmail.value = ''
   } catch (err) {
     userDetailDialog.value = false
     $q.notify({
@@ -698,8 +777,27 @@ async function openUserDetail(userId: string) {
   }
 }
 
+function resetUserDetailState() {
+  selectedUserDetail.value = null
+  selectedUserRole.value = null
+  selectedUserAccountStatus.value = null
+  userHardDeleteConfirmVisible.value = false
+  userHardDeleteConfirmEmail.value = ''
+  userDetailLoading.value = false
+  userHardDeleteSaving.value = false
+}
+
+function closeUserDetailDialog() {
+  if (userDetailDialogRef.value) {
+    userDetailDialogRef.value.hide()
+  } else {
+    userDetailDialog.value = false
+    resetUserDetailState()
+  }
+}
+
 function goToTeamFromUserDetail(teamId: string) {
-  userDetailDialog.value = false
+  closeUserDetailDialog()
   void router.push({ name: 'teamDetail', params: { id: teamId } })
 }
 
@@ -799,6 +897,56 @@ async function updateSelectedUserAccountStatus() {
   } finally {
     userStatusSaving.value = false
   }
+}
+
+function hardDeleteSelectedUser() {
+  if (!selectedUserDetail.value) return
+  userHardDeleteConfirmEmail.value = ''
+  userHardDeleteConfirmVisible.value = true
+}
+
+function cancelHardDeleteSelectedUser() {
+  userHardDeleteConfirmVisible.value = false
+  userHardDeleteConfirmEmail.value = ''
+}
+
+async function confirmHardDeleteSelectedUser() {
+  const user = selectedUserDetail.value
+  if (!user || !canConfirmHardDeleteSelectedUser.value) return
+
+  userHardDeleteSaving.value = true
+  try {
+    const data = await gqlRequest<{ adminHardDeleteUser: boolean }>(
+      `
+      mutation($userId: ID!, $confirmEmail: String!) {
+        adminHardDeleteUser(userId: $userId, confirmEmail: $confirmEmail)
+      }
+      `,
+      { userId: user.id, confirmEmail: userHardDeleteConfirmEmail.value.trim() }
+    )
+    if (!data.adminHardDeleteUser) throw new Error(t('adminHome.hardDeleteUserFailed'))
+    $q.notify({ type: 'positive', message: t('adminHome.hardDeleteUserSuccess', { email: user.email }) })
+    allUsers.value = allUsers.value.filter((u) => u.id !== user.id)
+    usersTotalElements.value = Math.max(0, usersTotalElements.value - 1)
+    redirectAfterHardDeletedUser()
+  } catch (err) {
+    await loadAllUsers()
+    if (!allUsers.value.some((u) => u.id === user.id)) {
+      redirectAfterHardDeletedUser()
+      return
+    }
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : t('adminHome.hardDeleteUserFailed'),
+    })
+  } finally {
+    if (userDetailDialog.value) userHardDeleteSaving.value = false
+  }
+}
+
+function redirectAfterHardDeletedUser() {
+  sessionStorage.setItem('tymovka.admin.activeTab', 'players')
+  window.location.assign(`${window.location.origin}${window.location.pathname}#/admin?refresh=${Date.now()}`)
 }
 
 function applyTeamsSearch() {
@@ -981,6 +1129,11 @@ function deleteManagedTeam(teamId: string, teamName: string) {
 }
 
 onMounted(async () => {
+  const savedActiveTab = sessionStorage.getItem('tymovka.admin.activeTab')
+  if (savedActiveTab === 'teams' || savedActiveTab === 'players') {
+    activeTab.value = savedActiveTab
+    sessionStorage.removeItem('tymovka.admin.activeTab')
+  }
   await loadAll()
 })
 </script>
