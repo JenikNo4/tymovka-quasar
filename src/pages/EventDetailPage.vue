@@ -43,6 +43,76 @@
         </div>
       </q-card-section>
 
+      <q-card-section>
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.addGuestTitle') }}</div>
+        <div class="row q-gutter-sm items-center">
+          <div class="col-12 col-md-5">
+            <q-input
+              v-model="guestDisplayName"
+              dense
+              outlined
+              :disable="isPastEvent(event)"
+              :label="t('event.guestName')"
+            />
+          </div>
+          <div class="col-12 col-md-3">
+            <q-select
+              v-model="guestPlayerRole"
+              dense
+              outlined
+              emit-value
+              map-options
+              :disable="isPastEvent(event)"
+              :options="guestRoleOptions"
+              :label="t('event.guestRole')"
+            />
+          </div>
+          <div class="col-12 col-md-auto">
+            <q-btn
+              color="primary"
+              :label="t('event.addGuest')"
+              :disable="isPastEvent(event) || !guestDisplayName.trim()"
+              :loading="guestLoading === 'add'"
+              @click="addGuest"
+            />
+          </div>
+        </div>
+      </q-card-section>
+
+      <q-card-section v-if="event.guests.length">
+        <div class="text-subtitle1 q-mb-sm">{{ t('event.guestsList') }}</div>
+        <q-list bordered separator>
+          <q-item v-for="g in event.guests" :key="g.id">
+            <q-item-section>
+              <q-item-label>
+                {{ g.displayName }}
+                <q-badge class="q-ml-sm" color="secondary" :label="t('event.guestBadge')" />
+              </q-item-label>
+              <q-item-label caption>
+                {{ t('event.addedBy') }}: {{ g.addedByUser?.displayName || '-' }}
+                <span class="q-ml-sm">{{ t('event.guestRole') }}: {{ playerRoleLabel(g.playerRole) }}</span>
+                <q-badge
+                  class="q-ml-sm"
+                  :color="statusColor(g.status)"
+                  :label="statusLabel(g.status)"
+                />
+              </q-item-label>
+            </q-item-section>
+            <q-item-section v-if="g.viewerCanRemove" side>
+              <q-btn
+                dense
+                flat
+                color="negative"
+                :label="t('teamDetail.remove')"
+                :disable="isPastEvent(event)"
+                :loading="guestLoading === `remove:${g.id}`"
+                @click="removeGuest(g.id)"
+              />
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-card-section>
+
       <q-card-section v-if="!event.viewerCanSetAttendanceForOthers">
         <div class="text-subtitle1 q-mb-sm">{{ t('event.participantsList') }}</div>
         <q-list bordered separator>
@@ -131,8 +201,8 @@
 
       <q-card-section v-if="event.viewerCanViewLogs">
         <div class="text-subtitle1 q-mb-sm">{{ t('event.activityLogTitle') }}</div>
-        <q-list v-if="event.logs.length" bordered separator>
-          <q-item v-for="log in event.logs" :key="log.id">
+        <q-list v-if="sortedLogs.length" bordered separator>
+          <q-item v-for="log in sortedLogs" :key="log.id">
             <q-item-section>
               <q-item-label>{{ logActionLabel(log.action) }}</q-item-label>
               <q-item-label caption>{{ log.message || '-' }}</q-item-label>
@@ -169,6 +239,14 @@ type EventParticipant = {
     user: { id: string; email: string; displayName: string }
   } | null
 }
+type EventGuest = {
+  id: string
+  displayName: string
+  playerRole: 'PLAYER' | 'GOALKEEPER'
+  status: ParticipantStatus
+  viewerCanRemove: boolean
+  addedByUser?: { id: string; email: string; displayName: string } | null
+}
 type EventLogItem = {
   id: string
   action: string
@@ -189,6 +267,7 @@ type EventItem = {
   viewerCanViewLogs: boolean
   team: { id: string; name: string }
   participants: EventParticipant[]
+  guests: EventGuest[]
   logs: EventLogItem[]
 }
 type TeamMembershipOption = { membershipId: string; label: string }
@@ -204,10 +283,17 @@ const loading = ref(false)
 const errorMessage = ref('')
 const event = ref<EventItem | null>(null)
 const attendanceLoading = ref('')
+const guestLoading = ref('')
 const addParticipantsLoading = ref(false)
 const detailMemberOptions = ref<TeamMembershipOption[]>([])
 const addMembershipIds = ref<string[]>([])
+const guestDisplayName = ref('')
+const guestPlayerRole = ref<'PLAYER' | 'GOALKEEPER'>('PLAYER')
 const participantStatuses: ParticipantStatus[] = ['INVITED', 'GOING', 'MAYBE', 'DECLINED']
+const guestRoleOptions = computed(() => [
+  { label: t('teamDetail.playerRolePlayer'), value: 'PLAYER' },
+  { label: t('teamDetail.playerRoleGoalkeeper'), value: 'GOALKEEPER' },
+])
 
 async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
   const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
@@ -254,13 +340,17 @@ function statusColor(status: ParticipantStatus | null): string {
 function attendanceSummary(value: EventItem): string {
   const goingPlayers = value.participants.filter(
     (p) => p.status === 'GOING' && p.membership?.playerRole === 'PLAYER'
-  ).length
+  ).length + value.guests.filter((g) => g.status === 'GOING' && g.playerRole === 'PLAYER').length
   const goingGoalies = value.participants.filter(
     (p) => p.status === 'GOING' && p.membership?.playerRole === 'GOALKEEPER'
-  ).length
+  ).length + value.guests.filter((g) => g.status === 'GOING' && g.playerRole === 'GOALKEEPER').length
   const maxPlayers = value.maxPlayers != null ? String(value.maxPlayers) : '-'
   const maxGoalies = value.maxGoalies != null ? String(value.maxGoalies) : '-'
   return `${t('event.signedSummary')} ${goingPlayers}/${maxPlayers} + ${goingGoalies}/${maxGoalies} ${t('event.goalies')}`
+}
+
+function playerRoleLabel(role: 'PLAYER' | 'GOALKEEPER'): string {
+  return role === 'GOALKEEPER' ? t('teamDetail.playerRoleGoalkeeper') : t('teamDetail.playerRolePlayer')
 }
 
 function eventTypeLabel(eventType: string): string {
@@ -296,6 +386,12 @@ const addableMemberOptions = computed(() => {
     value.participants.map((p) => p.membership?.id).filter((v): v is string => Boolean(v))
   )
   return detailMemberOptions.value.filter((o) => !existingMembershipIds.has(o.membershipId))
+})
+
+const sortedLogs = computed(() => {
+  const value = event.value
+  if (!value) return []
+  return [...value.logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 })
 
 async function loadTeamMemberOptions(teamId: string) {
@@ -351,6 +447,14 @@ async function loadEvent() {
               playerRole
               user { id email displayName }
             }
+          }
+          guests {
+            id
+            displayName
+            playerRole
+            status
+            viewerCanRemove
+            addedByUser { id email displayName }
           }
         }
       }
@@ -431,6 +535,53 @@ async function addParticipants() {
     $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.addParticipantsFailed') })
   } finally {
     addParticipantsLoading.value = false
+  }
+}
+
+async function addGuest() {
+  const value = event.value
+  const displayName = guestDisplayName.value.trim()
+  if (!value || !displayName) return
+  guestLoading.value = 'add'
+  try {
+    await gqlRequest<{ addEventGuest: { id: string } }>(
+      `
+      mutation($eventId: ID!, $displayName: String!, $playerRole: PlayerRole!, $status: ParticipantStatus!) {
+        addEventGuest(eventId: $eventId, displayName: $displayName, playerRole: $playerRole, status: $status) { id }
+      }
+      `,
+      { eventId: value.id, displayName, playerRole: guestPlayerRole.value, status: 'GOING' }
+    )
+    guestDisplayName.value = ''
+    guestPlayerRole.value = 'PLAYER'
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.addGuestSuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.addGuestFailed') })
+  } finally {
+    guestLoading.value = ''
+  }
+}
+
+async function removeGuest(guestId: string) {
+  const value = event.value
+  if (!value) return
+  guestLoading.value = `remove:${guestId}`
+  try {
+    await gqlRequest<{ removeEventGuest: { id: string } }>(
+      `
+      mutation($eventId: ID!, $guestId: ID!) {
+        removeEventGuest(eventId: $eventId, guestId: $guestId) { id }
+      }
+      `,
+      { eventId: value.id, guestId }
+    )
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.removeGuestSuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.removeGuestFailed') })
+  } finally {
+    guestLoading.value = ''
   }
 }
 
