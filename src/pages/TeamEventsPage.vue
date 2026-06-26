@@ -113,9 +113,20 @@
           <q-input v-model="createForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="createForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="createForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
-          <q-toggle v-model="createForm.inviteAllMembers" :label="t('event.inviteAll')" />
           <q-select
-            v-if="!createForm.inviteAllMembers"
+            v-model="createForm.attendanceMode"
+            :options="attendanceModeOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            outlined
+            dense
+            :label="t('event.attendanceMode')"
+          />
+          <q-toggle v-if="createForm.attendanceMode === 'INVITE_ONLY'" v-model="createForm.inviteAllMembers" :label="t('event.inviteAll')" />
+          <q-select
+            v-if="createForm.attendanceMode === 'INVITE_ONLY' && !createForm.inviteAllMembers"
             v-model="createForm.invitedMembershipIds"
             :options="memberOptions"
             option-value="membershipId"
@@ -159,6 +170,17 @@
           <q-input v-model="editForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="editForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="editForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
+          <q-select
+            v-model="editForm.attendanceMode"
+            :options="attendanceModeOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            outlined
+            dense
+            :label="t('event.attendanceMode')"
+          />
           <q-option-group
             v-if="selectedEvent?.seriesId"
             v-model="editScope"
@@ -216,6 +238,7 @@ type TeamEvent = {
   id: string
   title: string
   eventType: string
+  attendanceMode: string
   startTime: string
   endTime?: string | null
   seriesId?: string | null
@@ -226,6 +249,7 @@ type TeamEvent = {
   viewerCanEdit: boolean
 }
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
+type AttendanceMode = 'INVITE_ONLY' | 'OPEN_TO_TEAM'
 type EventChangeScope = 'SINGLE' | 'SERIES'
 type TeamMembershipOption = { membershipId: string; label: string }
 
@@ -247,6 +271,10 @@ const editLoading = ref(false)
 const deleteLoading = ref(false)
 const selectedEvent = ref<TeamEvent | null>(null)
 const eventTypes: EventType[] = ['TRAINING', 'MATCH', 'OTHER']
+const attendanceModeOptions = computed(() => [
+  { label: t('event.attendanceModeLabel.OPEN_TO_TEAM'), value: 'OPEN_TO_TEAM' as AttendanceMode },
+  { label: t('event.attendanceModeLabel.INVITE_ONLY'), value: 'INVITE_ONLY' as AttendanceMode },
+])
 const editScope = ref<EventChangeScope>('SINGLE')
 const deleteScope = ref<EventChangeScope>('SINGLE')
 const memberOptions = ref<TeamMembershipOption[]>([])
@@ -273,6 +301,7 @@ const createForm = ref({
   note: '',
   maxPlayers: '20',
   maxGoalies: '2',
+  attendanceMode: 'OPEN_TO_TEAM' as AttendanceMode,
   inviteAllMembers: true,
   invitedMembershipIds: [] as string[],
   repeatWeekly: false,
@@ -287,6 +316,7 @@ const editForm = ref({
   note: '',
   maxPlayers: '20',
   maxGoalies: '2',
+  attendanceMode: 'OPEN_TO_TEAM' as AttendanceMode,
 })
 
 async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
@@ -350,16 +380,22 @@ function defaultCapacitiesForType(eventType: EventType): { maxPlayers: string; m
   return { maxPlayers: '', maxGoalies: '' }
 }
 
+function defaultAttendanceModeForType(eventType: EventType): AttendanceMode {
+  return eventType === 'TRAINING' ? 'OPEN_TO_TEAM' : 'INVITE_ONLY'
+}
+
 function applyCreateTypeDefaults() {
   const defaults = defaultCapacitiesForType(createForm.value.eventType)
   createForm.value.maxPlayers = defaults.maxPlayers
   createForm.value.maxGoalies = defaults.maxGoalies
+  createForm.value.attendanceMode = defaultAttendanceModeForType(createForm.value.eventType)
 }
 
 function applyEditTypeDefaults() {
   const defaults = defaultCapacitiesForType(editForm.value.eventType)
   editForm.value.maxPlayers = defaults.maxPlayers
   editForm.value.maxGoalies = defaults.maxGoalies
+  editForm.value.attendanceMode = defaultAttendanceModeForType(editForm.value.eventType)
 }
 
 function parseCapacity(rawValue: string): ParsedCapacity {
@@ -398,6 +434,7 @@ async function loadEvents() {
         id
         title
         eventType
+        attendanceMode
         startTime
         endTime
         seriesId
@@ -442,6 +479,7 @@ function openCreateDialog() {
     note: '',
     maxPlayers: '20',
     maxGoalies: '2',
+    attendanceMode: 'OPEN_TO_TEAM',
     inviteAllMembers: true,
     invitedMembershipIds: [],
     repeatWeekly: false,
@@ -494,8 +532,9 @@ async function createEvent() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
-            inviteAllMembers: createForm.value.inviteAllMembers,
-            invitedMembershipIds: createForm.value.inviteAllMembers ? null : createForm.value.invitedMembershipIds,
+            attendanceMode: createForm.value.attendanceMode,
+            inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
+            invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
             repeatUntil: repeatUntil.toISOString(),
             weekDay,
           },
@@ -519,8 +558,9 @@ async function createEvent() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
-            inviteAllMembers: createForm.value.inviteAllMembers,
-            invitedMembershipIds: createForm.value.inviteAllMembers ? null : createForm.value.invitedMembershipIds,
+            attendanceMode: createForm.value.attendanceMode,
+            inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
+            invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
           },
         }
       )
@@ -547,6 +587,7 @@ function openEditDialog(event: TeamEvent) {
     note: event.note ?? '',
     maxPlayers: event.maxPlayers != null ? String(event.maxPlayers) : '',
     maxGoalies: event.maxGoalies != null ? String(event.maxGoalies) : '',
+    attendanceMode: (event.attendanceMode as AttendanceMode) ?? defaultAttendanceModeForType(event.eventType as EventType),
   }
   editDialog.value = true
 }
@@ -592,6 +633,7 @@ async function saveEventEdit() {
           maxPlayers,
           maxGoalies,
           reminderDaysBefore: null,
+          attendanceMode: editForm.value.attendanceMode,
         },
       }
     )

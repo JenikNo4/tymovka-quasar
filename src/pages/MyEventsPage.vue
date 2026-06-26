@@ -98,9 +98,20 @@
           <q-input v-model="createForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="createForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="createForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
-          <q-toggle v-model="createForm.inviteAllMembers" :label="t('event.inviteAll')" />
           <q-select
-            v-if="!createForm.inviteAllMembers"
+            v-model="createForm.attendanceMode"
+            :options="attendanceModeOptions"
+            option-value="value"
+            option-label="label"
+            emit-value
+            map-options
+            outlined
+            dense
+            :label="t('event.attendanceMode')"
+          />
+          <q-toggle v-if="createForm.attendanceMode === 'INVITE_ONLY'" v-model="createForm.inviteAllMembers" :label="t('event.inviteAll')" />
+          <q-select
+            v-if="createForm.attendanceMode === 'INVITE_ONLY' && !createForm.inviteAllMembers"
             v-model="createForm.invitedMembershipIds"
             :options="createMemberOptions"
             option-value="membershipId"
@@ -144,6 +155,7 @@ import { useI18n } from 'vue-i18n'
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'WAITLIST' | 'DECLINED'
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
+type AttendanceMode = 'INVITE_ONLY' | 'OPEN_TO_TEAM'
 type TeamOption = { id: string; name: string; viewerCanManage: boolean; isAdmin: boolean }
 type TeamMembershipOption = { membershipId: string; label: string }
 
@@ -187,6 +199,10 @@ const createDialog = ref(false)
 const createLoading = ref(false)
 const eventTypes: EventType[] = ['TRAINING', 'MATCH', 'OTHER']
 const createMemberOptions = ref<TeamMembershipOption[]>([])
+const attendanceModeOptions = computed(() => [
+  { label: t('event.attendanceModeLabel.OPEN_TO_TEAM'), value: 'OPEN_TO_TEAM' as AttendanceMode },
+  { label: t('event.attendanceModeLabel.INVITE_ONLY'), value: 'INVITE_ONLY' as AttendanceMode },
+])
 
 const createForm = ref({
   teamId: '',
@@ -198,6 +214,7 @@ const createForm = ref({
   note: '',
   maxPlayers: '20',
   maxGoalies: '2',
+  attendanceMode: 'OPEN_TO_TEAM' as AttendanceMode,
   inviteAllMembers: true,
   invitedMembershipIds: [] as string[],
   repeatWeekly: false,
@@ -268,10 +285,15 @@ function defaultCapacitiesForType(eventType: EventType): { maxPlayers: string; m
   return { maxPlayers: '', maxGoalies: '' }
 }
 
+function defaultAttendanceModeForType(eventType: EventType): AttendanceMode {
+  return eventType === 'TRAINING' ? 'OPEN_TO_TEAM' : 'INVITE_ONLY'
+}
+
 function applyCreateTypeDefaults() {
   const defaults = defaultCapacitiesForType(createForm.value.eventType)
   createForm.value.maxPlayers = defaults.maxPlayers
   createForm.value.maxGoalies = defaults.maxGoalies
+  createForm.value.attendanceMode = defaultAttendanceModeForType(createForm.value.eventType)
 }
 
 function parseCapacity(rawValue: string): ParsedCapacity {
@@ -297,6 +319,7 @@ function openCreateDialog() {
     note: '',
     maxPlayers: '20',
     maxGoalies: '2',
+    attendanceMode: 'OPEN_TO_TEAM',
     inviteAllMembers: true,
     invitedMembershipIds: [],
     repeatWeekly: false,
@@ -378,8 +401,9 @@ async function createEvent() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
-            inviteAllMembers: createForm.value.inviteAllMembers,
-            invitedMembershipIds: createForm.value.inviteAllMembers ? null : createForm.value.invitedMembershipIds,
+            attendanceMode: createForm.value.attendanceMode,
+            inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
+            invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
             repeatUntil: repeatUntil.toISOString(),
             weekDay,
           },
@@ -403,8 +427,9 @@ async function createEvent() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
-            inviteAllMembers: createForm.value.inviteAllMembers,
-            invitedMembershipIds: createForm.value.inviteAllMembers ? null : createForm.value.invitedMembershipIds,
+            attendanceMode: createForm.value.attendanceMode,
+            inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
+            invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
           },
         }
       )
