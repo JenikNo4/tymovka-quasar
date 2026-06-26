@@ -27,15 +27,15 @@
         <div class="q-mb-sm"><b>{{ t('event.noteLabel') }}:</b> {{ event.note || '-' }}</div>
       </q-card-section>
 
-      <q-card-section v-if="myParticipant">
+      <q-card-section v-if="canSetMyAttendance">
         <div class="text-subtitle1 q-mb-sm">{{ t('event.myAttendance') }}</div>
         <div class="row q-gutter-sm">
           <q-btn
             v-for="status in participantStatuses"
             :key="status"
             :label="statusLabel(status)"
-            :color="myParticipant.status === status ? 'primary' : 'grey-7'"
-            :outline="myParticipant.status !== status"
+            :color="myParticipant?.status === status ? 'primary' : 'grey-7'"
+            :outline="myParticipant?.status !== status"
             :disable="isPastEvent(event)"
             :loading="attendanceLoading === status"
             @click="setMyAttendance(status)"
@@ -377,6 +377,11 @@ const myParticipant = computed(() => {
   const email = auth.user?.email
   if (!value || !email) return null
   return value.participants.find((p) => p.membership?.user.email === email) || null
+})
+
+const canSetMyAttendance = computed(() => {
+  const value = event.value
+  return Boolean(value && !value.viewerCanSetAttendanceForOthers)
 })
 
 const addableMemberOptions = computed(() => {
