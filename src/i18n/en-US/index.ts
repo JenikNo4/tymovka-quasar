@@ -30,6 +30,7 @@ export default {
     language: 'Language',
     languageCzech: 'Čeština',
     languageEnglish: 'English',
+    version: 'Version',
   },
 
   dashboard: {
@@ -326,6 +327,9 @@ export default {
     memberAttendanceUpdated: 'Member attendance updated.',
     addParticipantsSuccess: 'Participants added.',
     addParticipantsFailed: 'Adding participants failed',
+    addParticipantsToFutureSeries: 'Add to future series events',
+    addParticipantsToFutureSeriesSuccess: 'Participants added to future series events.',
+    addParticipantsToFutureSeriesFailed: 'Adding participants to future series events failed',
     removeParticipantSuccess: 'Participant removed.',
     removeParticipantFailed: 'Removing participant failed',
     addGuestSuccess: 'Guest added.',

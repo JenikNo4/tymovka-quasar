@@ -154,6 +154,15 @@
           <div class="col-12 col-md-auto">
             <q-btn color="primary" :label="t('event.add')" :disable="isPastEvent(event)" :loading="addParticipantsLoading" @click="addParticipants" />
           </div>
+          <div v-if="event.seriesId" class="col-12 col-md-auto">
+            <q-btn
+              color="secondary"
+              :label="t('event.addParticipantsToFutureSeries')"
+              :disable="isPastEvent(event) || !addMembershipIds.length"
+              :loading="addParticipantsLoading"
+              @click="addParticipantsToFutureSeries"
+            />
+          </div>
         </div>
 
         <div class="text-subtitle1 q-mb-sm">{{ t('event.participantManagement') }}</div>
@@ -257,6 +266,7 @@ type EventItem = {
   id: string
   title: string
   eventType: string
+  seriesId?: string | null
   startTime: string
   endTime?: string | null
   location: string
@@ -428,6 +438,7 @@ async function loadEvent() {
           id
           title
           eventType
+          seriesId
           startTime
           endTime
           location
@@ -538,6 +549,32 @@ async function addParticipants() {
     $q.notify({ type: 'positive', message: t('event.addParticipantsSuccess') })
   } catch (err) {
     $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.addParticipantsFailed') })
+  } finally {
+    addParticipantsLoading.value = false
+  }
+}
+
+async function addParticipantsToFutureSeries() {
+  const value = event.value
+  if (!value || !addMembershipIds.value.length) return
+  addParticipantsLoading.value = true
+  try {
+    await gqlRequest<{ addParticipantsToFutureSeries: Array<{ id: string }> }>(
+      `
+      mutation($eventId: ID!, $membershipIds: [ID!]!) {
+        addParticipantsToFutureSeries(eventId: $eventId, membershipIds: $membershipIds) { id }
+      }
+      `,
+      { eventId: value.id, membershipIds: addMembershipIds.value }
+    )
+    addMembershipIds.value = []
+    await loadEvent()
+    $q.notify({ type: 'positive', message: t('event.addParticipantsToFutureSeriesSuccess') })
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : t('event.addParticipantsToFutureSeriesFailed'),
+    })
   } finally {
     addParticipantsLoading.value = false
   }
