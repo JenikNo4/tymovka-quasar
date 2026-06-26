@@ -27,6 +27,7 @@ export default {
     language: 'Jazyk',
     languageCzech: 'Čeština',
     languageEnglish: 'English',
+    version: 'Verze',
   },
 
   dashboard: {
@@ -323,6 +324,9 @@ export default {
     memberAttendanceUpdated: 'Účast člena byla aktualizována.',
     addParticipantsSuccess: 'Účastníci byli přidáni.',
     addParticipantsFailed: 'Přidání účastníků selhalo',
+    addParticipantsToFutureSeries: 'Přidat do budoucích událostí série',
+    addParticipantsToFutureSeriesSuccess: 'Účastníci byli přidáni do budoucích událostí série.',
+    addParticipantsToFutureSeriesFailed: 'Přidání do budoucích událostí série selhalo',
     removeParticipantSuccess: 'Účastník byl odebrán.',
     removeParticipantFailed: 'Odebrání účastníka selhalo',
     addGuestSuccess: 'Host byl přidán.',

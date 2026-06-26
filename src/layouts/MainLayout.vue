@@ -58,6 +58,12 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <q-footer class="bg-grey-2 text-grey-7 app-footer">
+      <div class="text-caption text-right q-px-md q-py-xs">
+        {{ t('layout.version') }} {{ appVersion }}
+      </div>
+    </q-footer>
   </q-layout>
 </template>
 
@@ -70,6 +76,7 @@ import { useAuth } from 'src/stores/useAuth'
 const auth = useAuth()
 const router = useRouter()
 const { t, locale } = useI18n()
+const appVersion = import.meta.env.VITE_APP_VERSION || 'dev'
 
 const initials = computed(() => {
   const display = auth.user?.firstName
@@ -119,3 +126,9 @@ watch(
   { immediate: true }
 )
 </script>
+
+<style scoped>
+.app-footer {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+</style>
