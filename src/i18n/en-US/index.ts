@@ -270,6 +270,11 @@ export default {
     noteOptional: 'Note (optional)',
     maxPlayers: 'Max players',
     maxGoalies: 'Max goalies',
+    attendanceMode: 'Event access',
+    attendanceModeLabel: {
+      OPEN_TO_TEAM: 'Open to team',
+      INVITE_ONLY: 'Invite only',
+    },
     inviteAll: 'Invite all team members',
     inviteSelected: 'Invite selected members',
     repeatWeekly: 'Repeat weekly',

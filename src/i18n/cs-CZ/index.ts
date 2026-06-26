@@ -267,6 +267,11 @@ export default {
     noteOptional: 'Poznámka (volitelné)',
     maxPlayers: 'Max hráčů',
     maxGoalies: 'Max gólmanů',
+    attendanceMode: 'Přístup k události',
+    attendanceModeLabel: {
+      OPEN_TO_TEAM: 'Otevřeno pro tým',
+      INVITE_ONLY: 'Jen pozvaní',
+    },
     inviteAll: 'Pozvat všechny členy týmu',
     inviteSelected: 'Pozvat konkrétní členy',
     repeatWeekly: 'Opakovat týdně',
