@@ -33,8 +33,23 @@
             {{ event.location }}
           </q-item-label>
         </q-item-section>
-        <q-item-section side>
+        <q-item-section side class="items-end q-gutter-xs">
           <q-badge :color="statusColor(event.myStatus)" :label="statusLabel(event.myStatus)" />
+          <div class="row q-gutter-xs justify-end">
+            <q-btn
+              v-for="status in quickAttendanceStatuses"
+              :key="`${event.id}-${status}`"
+              dense
+              unelevated
+              size="sm"
+              :color="event.myStatus === status ? statusColor(status) : 'grey-4'"
+              :text-color="event.myStatus === status ? 'white' : 'grey-9'"
+              :label="quickStatusLabel(status)"
+              :disable="isPastEvent(event)"
+              :loading="attendanceLoading === `${event.id}:${status}`"
+              @click.stop="setQuickAttendance(event, status)"
+            />
+          </div>
         </q-item-section>
       </q-item>
     </q-list>
@@ -197,7 +212,9 @@ const eventsTotalPages = ref(0)
 const showPastEvents = ref(false)
 const createDialog = ref(false)
 const createLoading = ref(false)
+const attendanceLoading = ref('')
 const eventTypes: EventType[] = ['TRAINING', 'MATCH', 'OTHER']
+const quickAttendanceStatuses: ParticipantStatus[] = ['GOING', 'MAYBE', 'DECLINED']
 const createMemberOptions = ref<TeamMembershipOption[]>([])
 const attendanceModeOptions = computed(() => [
   { label: t('event.attendanceModeLabel.OPEN_TO_TEAM'), value: 'OPEN_TO_TEAM' as AttendanceMode },
@@ -250,6 +267,16 @@ function statusColor(status: ParticipantStatus | null): string {
 function statusLabel(status: ParticipantStatus | null): string {
   if (!status) return t('event.noStatus')
   return t(`event.statusLabel.${status}`)
+}
+
+function quickStatusLabel(status: ParticipantStatus): string {
+  return statusLabel(status)
+}
+
+function isPastEvent(event: EventItem): boolean {
+  const start = new Date(event.startTime)
+  if (Number.isNaN(start.getTime())) return false
+  return start.getTime() < Date.now()
 }
 
 function eventTypeLabel(eventType: string): string {
@@ -445,8 +472,8 @@ async function createEvent() {
   }
 }
 
-async function loadEvents() {
-  loading.value = true
+async function loadEvents(showSpinner = true) {
+  if (showSpinner) loading.value = true
   loadError.value = ''
   try {
     if (!auth.meLoaded) await auth.fetchMe()
@@ -485,7 +512,27 @@ async function loadEvents() {
   } catch (err) {
     loadError.value = err instanceof Error ? err.message : t('event.loadFailed')
   } finally {
-    loading.value = false
+    if (showSpinner) loading.value = false
+  }
+}
+
+async function setQuickAttendance(event: EventItem, status: ParticipantStatus) {
+  attendanceLoading.value = `${event.id}:${status}`
+  try {
+    await gqlRequest<{ setMyAttendance: { id: string } }>(
+      `
+      mutation($eventId: ID!, $status: ParticipantStatus!, $substituteName: String) {
+        setMyAttendance(eventId: $eventId, status: $status, substituteName: $substituteName) { id }
+      }
+      `,
+      { eventId: event.id, status, substituteName: null }
+    )
+    await loadEvents(false)
+    $q.notify({ type: 'positive', message: t('event.attendanceUpdated') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.attendanceUpdateFailed') })
+  } finally {
+    attendanceLoading.value = ''
   }
 }
 
