@@ -115,8 +115,8 @@ export default defineConfig((ctx) => {
       // components: [],
       // directives: [],
 
-      // Quasar plugins
-      plugins: [],
+      // Quasar plugins used through useQuasar() as $q.dialog/$q.notify.
+      plugins: ['Dialog', 'Notify'],
     },
 
     // animations: 'all', // --- includes all animations
