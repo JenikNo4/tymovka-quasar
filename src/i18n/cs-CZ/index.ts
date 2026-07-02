@@ -14,6 +14,7 @@ export default {
     noDescription: 'Bez popisu',
     unknownMember: 'Neznámý člen',
     operationFailed: 'Operace selhala',
+    refresh: 'Obnovit',
   },
 
   layout: {
@@ -250,6 +251,17 @@ export default {
     openEventDetail: 'Otevřít detail',
     upcomingEvents: 'Nadcházející události',
     pastEvents: 'Minulé události',
+    deliveryTitle: 'Notifikace',
+    deliverySubtitle: 'Audit odeslaných emailů a připravovaných push notifikací týmu.',
+    noDeliveries: 'Zatím zde nejsou žádné záznamy o doručení.',
+    deliveryLoadFailed: 'Nepodařilo se načíst notifikace týmu',
+    deliveryCreatedAt: 'Čas',
+    deliveryType: 'Typ',
+    deliveryChannel: 'Kanál',
+    deliveryRecipient: 'Příjemce',
+    deliveryStatus: 'Stav',
+    deliveryAttempts: 'Pokusy',
+    deliveryLastError: 'Poslední chyba',
   },
 
   event: {

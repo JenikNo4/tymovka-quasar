@@ -17,6 +17,7 @@ export default {
     noDescription: 'No description',
     unknownMember: 'Unknown member',
     operationFailed: 'Operation failed',
+    refresh: 'Refresh',
   },
 
   layout: {
@@ -253,6 +254,17 @@ export default {
     openEventDetail: 'Open detail',
     upcomingEvents: 'Upcoming events',
     pastEvents: 'Past events',
+    deliveryTitle: 'Notifications',
+    deliverySubtitle: 'Audit of sent emails and planned team push notifications.',
+    noDeliveries: 'No delivery records yet.',
+    deliveryLoadFailed: 'Failed to load team notifications',
+    deliveryCreatedAt: 'Time',
+    deliveryType: 'Type',
+    deliveryChannel: 'Channel',
+    deliveryRecipient: 'Recipient',
+    deliveryStatus: 'Status',
+    deliveryAttempts: 'Attempts',
+    deliveryLastError: 'Last error',
   },
 
   event: {
