@@ -56,6 +56,8 @@ export default {
     registerSuccess: 'Registrace proběhla úspěšně.',
     registerFailed: 'Registrace selhala.',
     registerVerifyEmailSent: 'Registrace byla vytvořena. Zkontroluj e-mail a potvrď registraci odkazem ve zprávě.',
+    registerTeamInviteSuccess: 'Registrace byla vytvořena a e-mail byl ověřen pozvánkou do týmu. Teď se můžeš přihlásit.',
+    teamInviteDetected: 'Registruješ se přes pozvánku do týmu. E-mail bude ověřen tímto odkazem.',
     emailVerificationSuccess: 'E-mail byl ověřen. Teď se můžeš přihlásit.',
     emailVerificationFailed: 'Ověření e-mailu se nepovedlo. Odkaz je neplatný nebo expirovaný.',
     resendVerificationAction: 'Poslat ověřovací e-mail znovu',

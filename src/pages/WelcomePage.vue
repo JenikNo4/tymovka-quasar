@@ -185,6 +185,7 @@ const registerErrorMessage = ref('')
 const registerSuccessMessage = ref('')
 const infoMessage = ref('')
 const lastVerificationEmail = ref('')
+const teamInviteToken = ref('')
 
 const loginForm = reactive({
   email: '',
@@ -260,14 +261,23 @@ async function submitRegister() {
   infoMessage.value = ''
   submitting.value = true
   try {
-    await auth.registerWithEmail(registerForm.email, registerForm.password, registerForm.confirmPassword)
+    await auth.registerWithEmail(
+      registerForm.email,
+      registerForm.password,
+      registerForm.confirmPassword,
+      teamInviteToken.value || null
+    )
     lastVerificationEmail.value = registerForm.email.trim()
-    registerSuccessMessage.value = t('welcome.registerVerifyEmailSent')
+    registerSuccessMessage.value = teamInviteToken.value
+      ? t('welcome.registerTeamInviteSuccess')
+      : t('welcome.registerVerifyEmailSent')
     if (typeof $q.notify === 'function') {
       $q.notify({ type: 'positive', message: t('welcome.registerSuccess') })
     }
     activeTab.value = 'login'
-    infoMessage.value = t('welcome.registerVerifyEmailSent')
+    infoMessage.value = teamInviteToken.value
+      ? t('welcome.registerTeamInviteSuccess')
+      : t('welcome.registerVerifyEmailSent')
   } catch (error) {
     registerErrorMessage.value = error instanceof Error ? error.message : t('welcome.registerFailed')
     if (typeof $q.notify === 'function') {
@@ -312,6 +322,22 @@ async function forgotPassword() {
 }
 
 onMounted(async () => {
+  const rawInviteToken = Array.isArray(route.query.teamInviteToken)
+    ? route.query.teamInviteToken[0]
+    : route.query.teamInviteToken
+  const rawInviteEmail = Array.isArray(route.query.inviteEmail)
+    ? route.query.inviteEmail[0]
+    : route.query.inviteEmail
+
+  if (typeof rawInviteToken === 'string' && rawInviteToken.trim()) {
+    teamInviteToken.value = rawInviteToken.trim()
+    activeTab.value = 'register'
+    infoMessage.value = t('welcome.teamInviteDetected')
+  }
+  if (typeof rawInviteEmail === 'string' && rawInviteEmail.trim()) {
+    registerForm.email = rawInviteEmail.trim()
+  }
+
   if (route.query.emailVerified === 'success') {
     activeTab.value = 'login'
     infoMessage.value = t('welcome.emailVerificationSuccess')

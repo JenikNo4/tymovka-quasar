@@ -59,6 +59,8 @@ export default {
     registerSuccess: 'Registration was successful.',
     registerFailed: 'Registration failed.',
     registerVerifyEmailSent: 'Registration was created. Check your email and confirm it using the link in the message.',
+    registerTeamInviteSuccess: 'Registration was created and the email was verified by the team invitation. You can sign in now.',
+    teamInviteDetected: 'You are registering through a team invitation. This link will verify your email.',
     emailVerificationSuccess: 'Email was verified. You can sign in now.',
     emailVerificationFailed: 'Email verification failed. The link is invalid or expired.',
     resendVerificationAction: 'Send verification email again',
