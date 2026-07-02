@@ -334,14 +334,19 @@ export const useAuth = defineStore('auth', {
       await this.refreshMe()
     },
 
-    async registerWithEmail(email: string, password: string, confirmPassword: string): Promise<EmailAuthResponse> {
+    async registerWithEmail(
+      email: string,
+      password: string,
+      confirmPassword: string,
+      teamInviteToken?: string | null
+    ): Promise<EmailAuthResponse> {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/email/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({ email, password, confirmPassword }),
+        body: JSON.stringify({ email, password, confirmPassword, teamInviteToken: teamInviteToken || null }),
       })
 
       const payload = await readEmailAuthResponse(response)
