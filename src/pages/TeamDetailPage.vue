@@ -121,7 +121,28 @@
             </q-item-label>
           </q-item-section>
           <q-item-section side v-if="team?.viewerCanManage && m.status === 'APPROVED'">
-            <q-btn flat color="negative" :label="t('teamDetail.remove')" :loading="memberActionId === `remove:${m.user.id}`" @click="removeMember(m.user.id)" />
+            <div class="row items-center q-gutter-sm">
+              <q-select
+                v-model="memberTeamRoleDrafts[m.id]"
+                dense
+                outlined
+                emit-value
+                map-options
+                :options="teamRoleOptions"
+                :label="t('teamDetail.teamRoleLabel')"
+                :disable="memberActionId === `role:${m.id}`"
+                style="min-width: 150px"
+              />
+              <q-btn
+                flat
+                color="primary"
+                :label="t('common.save')"
+                :loading="memberActionId === `role:${m.id}`"
+                :disable="!memberTeamRoleDrafts[m.id] || memberTeamRoleDrafts[m.id] === m.role"
+                @click="updateMemberTeamRole(m)"
+              />
+              <q-btn flat color="negative" :label="t('teamDetail.remove')" :loading="memberActionId === `remove:${m.user.id}`" @click="removeMember(m.user.id)" />
+            </div>
           </q-item-section>
         </q-item>
         <q-item v-if="!members.length">
@@ -282,7 +303,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
@@ -321,6 +342,7 @@ type InviteResult = {
 }
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
 type AttendanceMode = 'INVITE_ONLY' | 'OPEN_TO_TEAM'
+type TeamRole = 'ADMIN' | 'MEMBER'
 type TeamMembershipOption = { membershipId: string; label: string }
 type NotificationDeliveryChannel = 'EMAIL' | 'PUSH'
 type NotificationDeliveryStatus = 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED_DUPLICATE' | 'NOT_IMPLEMENTED'
@@ -355,6 +377,7 @@ const pendingMembers = ref<TeamMember[]>([])
 const notificationDeliveries = ref<NotificationDelivery[]>([])
 const deliveryLoading = ref(false)
 const memberActionId = ref('')
+const memberTeamRoleDrafts = reactive<Record<string, TeamRole>>({})
 const myMembership = ref<TeamMember | null>(null)
 const myPlayerRoleDraft = ref<'PLAYER' | 'GOALKEEPER' | null>(null)
 const myProfileNumberDraft = ref('')
@@ -369,6 +392,10 @@ const attendanceModeOptions = computed(() => [
   { label: t('event.attendanceModeLabel.OPEN_TO_TEAM'), value: 'OPEN_TO_TEAM' as AttendanceMode },
   { label: t('event.attendanceModeLabel.INVITE_ONLY'), value: 'INVITE_ONLY' as AttendanceMode },
 ])
+const teamRoleOptions = [
+  { label: 'MEMBER', value: 'MEMBER' as TeamRole },
+  { label: 'ADMIN', value: 'ADMIN' as TeamRole },
+] as const
 const createForm = ref({
   title: '',
   eventType: 'TRAINING' as EventType,
@@ -636,6 +663,7 @@ async function loadTeamDetail() {
       { teamId }
     )
     members.value = membersData.teamMembers
+    syncMemberTeamRoleDrafts(membersData.teamMembers)
     const myMembershipData = await gqlRequest<{ myTeamMembership: TeamMember | null }>(
       `
       query($teamId: ID!) {
@@ -684,6 +712,15 @@ async function loadTeamDetail() {
   } finally {
     loading.value = false
   }
+}
+
+function syncMemberTeamRoleDrafts(teamMembers: TeamMember[]) {
+  Object.keys(memberTeamRoleDrafts).forEach((membershipId) => {
+    delete memberTeamRoleDrafts[membershipId]
+  })
+  teamMembers.forEach((membership) => {
+    memberTeamRoleDrafts[membership.id] = membership.role
+  })
 }
 
 async function loadNotificationDeliveries() {
@@ -789,6 +826,30 @@ async function rejectMembership(userId: string) {
     $q.notify({ type: 'positive', message: t('teamDetail.rejectSuccess') })
   } catch (err) {
     $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('common.operationFailed') })
+  } finally {
+    memberActionId.value = ''
+  }
+}
+
+async function updateMemberTeamRole(member: TeamMember) {
+  const nextRole = memberTeamRoleDrafts[member.id]
+  if (!nextRole || nextRole === member.role) return
+  memberActionId.value = `role:${member.id}`
+  try {
+    const data = await gqlRequest<{ adminUpdateTeamMembershipRole: boolean }>(
+      `
+      mutation($teamId: ID!, $userId: ID!, $role: TeamRole!) {
+        adminUpdateTeamMembershipRole(teamId: $teamId, userId: $userId, role: $role)
+      }
+      `,
+      { teamId, userId: member.user.id, role: nextRole }
+    )
+    if (!data.adminUpdateTeamMembershipRole) throw new Error(t('teamDetail.teamRoleUpdateFailed'))
+    await loadTeamDetail()
+    $q.notify({ type: 'positive', message: t('teamDetail.teamRoleUpdateSuccess') })
+  } catch (err) {
+    memberTeamRoleDrafts[member.id] = member.role
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('teamDetail.teamRoleUpdateFailed') })
   } finally {
     memberActionId.value = ''
   }
