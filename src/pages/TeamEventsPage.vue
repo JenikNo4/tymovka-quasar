@@ -23,80 +23,124 @@
     </q-inner-loading>
 
     <q-card bordered flat>
-      <q-card-section>
-        <div class="text-subtitle1">{{ t('teamDetail.eventsTitle') }}</div>
-      </q-card-section>
-      <q-separator />
-      <q-list separator>
-        <q-item v-for="event in upcomingEvents" :key="event.id">
-          <q-item-section>
-            <q-item-label class="text-weight-medium">{{ event.title }}</q-item-label>
-            <q-item-label caption>
-              {{ eventTypeLabel(event.eventType) }} | {{ formatDateTime(event.startTime) }}
-            </q-item-label>
-            <q-item-label caption>{{ event.location }}</q-item-label>
-          </q-item-section>
-          <q-item-section side>
-            <div class="row q-gutter-xs">
-              <q-btn flat color="primary" :label="t('teamDetail.openEventDetail')" @click="openEventDetail(event.id)" />
-              <q-btn
-                v-if="event.viewerCanEdit"
-                flat
-                color="primary"
-                :label="t('event.editEvent')"
-                @click="openEditDialog(event)"
-              />
-              <q-btn
-                v-if="event.viewerCanEdit"
-                flat
-                color="negative"
-                :label="t('event.deleteEvent')"
-                @click="openDeleteDialog(event)"
-              />
-            </div>
-          </q-item-section>
-        </q-item>
-        <q-item v-if="!upcomingEvents.length && !pastEvents.length">
-          <q-item-section>
-            <q-item-label caption>{{ t('event.noEvents') }}</q-item-label>
-          </q-item-section>
-        </q-item>
-        <q-item v-if="pastEvents.length">
-          <q-item-section>
-            <q-item-label class="text-caption text-grey-7 text-uppercase">
-              {{ t('teamDetail.pastEvents') }}
-            </q-item-label>
-          </q-item-section>
-        </q-item>
-        <q-item v-for="event in pastEvents" :key="`past-${event.id}`">
-          <q-item-section>
-            <q-item-label class="text-weight-medium">{{ event.title }}</q-item-label>
-            <q-item-label caption>
-              {{ eventTypeLabel(event.eventType) }} | {{ formatDateTime(event.startTime) }}
-            </q-item-label>
-            <q-item-label caption>{{ event.location }}</q-item-label>
-          </q-item-section>
-          <q-item-section side>
-            <div class="row q-gutter-xs">
-              <q-btn flat color="primary" :label="t('teamDetail.openEventDetail')" @click="openEventDetail(event.id)" />
-              <q-btn
-                v-if="event.viewerCanEdit"
-                flat
-                color="primary"
-                :label="t('event.editEvent')"
-                @click="openEditDialog(event)"
-              />
-              <q-btn
-                v-if="event.viewerCanEdit"
-                flat
-                color="negative"
-                :label="t('event.deleteEvent')"
-                @click="openDeleteDialog(event)"
-              />
-            </div>
-          </q-item-section>
-        </q-item>
-      </q-list>
+      <q-tabs
+        v-if="team?.viewerCanManage"
+        v-model="eventsTab"
+        dense
+        align="left"
+        active-color="primary"
+        indicator-color="primary"
+      >
+        <q-tab name="active" :label="t('teamDetail.eventsTitle')" />
+        <q-tab name="canceled" :label="t('event.canceledEventsTitle')" />
+      </q-tabs>
+      <q-separator v-if="team?.viewerCanManage" />
+
+      <q-tab-panels v-model="eventsTab" animated>
+        <q-tab-panel name="active" class="q-pa-none">
+          <q-card-section v-if="!team?.viewerCanManage">
+            <div class="text-subtitle1">{{ t('teamDetail.eventsTitle') }}</div>
+          </q-card-section>
+          <q-separator v-if="!team?.viewerCanManage" />
+          <q-list separator>
+            <q-item v-for="event in upcomingEvents" :key="event.id">
+              <q-item-section>
+                <q-item-label class="text-weight-medium">{{ event.title }}</q-item-label>
+                <q-item-label caption>
+                  {{ eventTypeLabel(event.eventType) }} | {{ formatDateTime(event.startTime) }}
+                </q-item-label>
+                <q-item-label caption>{{ event.location }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn flat color="primary" :label="t('teamDetail.openEventDetail')" @click="openEventDetail(event.id)" />
+                  <q-btn
+                    v-if="event.viewerCanEdit"
+                    flat
+                    color="primary"
+                    :label="t('event.editEvent')"
+                    @click="openEditDialog(event)"
+                  />
+                  <q-btn
+                    v-if="event.viewerCanEdit"
+                    flat
+                    color="negative"
+                    :label="t('event.cancelEvent')"
+                    @click="openCancelDialog(event)"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!upcomingEvents.length && !pastEvents.length">
+              <q-item-section>
+                <q-item-label caption>{{ t('event.noEvents') }}</q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item v-if="pastEvents.length">
+              <q-item-section>
+                <q-item-label class="text-caption text-grey-7 text-uppercase">
+                  {{ t('teamDetail.pastEvents') }}
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+            <q-item v-for="event in pastEvents" :key="`past-${event.id}`">
+              <q-item-section>
+                <q-item-label class="text-weight-medium">{{ event.title }}</q-item-label>
+                <q-item-label caption>
+                  {{ eventTypeLabel(event.eventType) }} | {{ formatDateTime(event.startTime) }}
+                </q-item-label>
+                <q-item-label caption>{{ event.location }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <div class="row q-gutter-xs">
+                  <q-btn flat color="primary" :label="t('teamDetail.openEventDetail')" @click="openEventDetail(event.id)" />
+                  <q-btn
+                    v-if="event.viewerCanEdit"
+                    flat
+                    color="primary"
+                    :label="t('event.editEvent')"
+                    @click="openEditDialog(event)"
+                  />
+                  <q-btn
+                    v-if="event.viewerCanEdit"
+                    flat
+                    color="negative"
+                    :label="t('event.cancelEvent')"
+                    @click="openCancelDialog(event)"
+                  />
+                </div>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-tab-panel>
+
+        <q-tab-panel v-if="team?.viewerCanManage" name="canceled" class="q-pa-none">
+          <q-list separator>
+            <q-item v-for="event in canceledEvents" :key="`canceled-${event.id}`">
+              <q-item-section>
+                <q-item-label class="text-weight-medium text-grey-8">{{ event.title }}</q-item-label>
+                <q-item-label caption>
+                  {{ eventTypeLabel(event.eventType) }} | {{ formatDateTime(event.startTime) }}
+                </q-item-label>
+                <q-item-label caption>{{ event.location }}</q-item-label>
+              </q-item-section>
+              <q-item-section side>
+                <q-btn
+                  flat
+                  color="primary"
+                  :label="t('event.restoreEvent')"
+                  @click="openRestoreDialog(event)"
+                />
+              </q-item-section>
+            </q-item>
+            <q-item v-if="!canceledEvents.length">
+              <q-item-section>
+                <q-item-label caption>{{ t('event.noCanceledEvents') }}</q-item-label>
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </q-tab-panel>
+      </q-tab-panels>
     </q-card>
 
     <q-dialog v-model="createDialog">
@@ -197,16 +241,16 @@
       </q-card>
     </q-dialog>
 
-    <q-dialog v-model="deleteDialog">
+    <q-dialog v-model="cancelDialog">
       <q-card style="min-width: 420px; max-width: 96vw;">
         <q-card-section>
-          <div class="text-h6">{{ t('event.deleteTitle') }}</div>
+          <div class="text-h6">{{ t('event.cancelTitle') }}</div>
         </q-card-section>
         <q-card-section>
-          <div class="q-mb-md">{{ t('event.deleteMessage') }}</div>
+          <div class="q-mb-md">{{ t('event.cancelMessage') }}</div>
           <q-option-group
             v-if="selectedEvent?.seriesId"
-            v-model="deleteScope"
+            v-model="cancelScope"
             :options="scopeOptions"
             color="primary"
             type="radio"
@@ -214,8 +258,31 @@
           />
         </q-card-section>
         <q-card-actions align="right">
-          <q-btn flat :label="t('common.cancel')" v-close-popup :disable="deleteLoading" />
-          <q-btn color="negative" :label="t('event.deleteEvent')" :loading="deleteLoading" @click="deleteEventWithScope" />
+          <q-btn flat :label="t('common.cancel')" v-close-popup :disable="cancelLoading" />
+          <q-btn color="negative" :label="t('event.cancelEvent')" :loading="cancelLoading" @click="cancelEventWithScope" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <q-dialog v-model="restoreDialog">
+      <q-card style="min-width: 420px; max-width: 96vw;">
+        <q-card-section>
+          <div class="text-h6">{{ t('event.restoreTitle') }}</div>
+        </q-card-section>
+        <q-card-section>
+          <div class="q-mb-md">{{ t('event.restoreMessage') }}</div>
+          <q-option-group
+            v-if="selectedEvent?.seriesId"
+            v-model="restoreScope"
+            :options="scopeOptions"
+            color="primary"
+            type="radio"
+            :label="t('event.applyScope')"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat :label="t('common.cancel')" v-close-popup :disable="restoreLoading" />
+          <q-btn color="primary" :label="t('event.restoreEvent')" :loading="restoreLoading" @click="restoreEventWithScope" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -238,6 +305,7 @@ type TeamEvent = {
   id: string
   title: string
   eventType: string
+  status?: string
   attendanceMode: string
   startTime: string
   endTime?: string | null
@@ -246,7 +314,7 @@ type TeamEvent = {
   note?: string | null
   maxPlayers?: number | null
   maxGoalies?: number | null
-  viewerCanEdit: boolean
+  viewerCanEdit?: boolean
 }
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
 type AttendanceMode = 'INVITE_ONLY' | 'OPEN_TO_TEAM'
@@ -263,20 +331,25 @@ const loading = ref(false)
 const errorMessage = ref('')
 const team = ref<TeamDetail | null>(null)
 const teamEvents = ref<TeamEvent[]>([])
+const canceledEvents = ref<TeamEvent[]>([])
 const createDialog = ref(false)
 const editDialog = ref(false)
-const deleteDialog = ref(false)
+const cancelDialog = ref(false)
+const restoreDialog = ref(false)
 const createLoading = ref(false)
 const editLoading = ref(false)
-const deleteLoading = ref(false)
+const cancelLoading = ref(false)
+const restoreLoading = ref(false)
 const selectedEvent = ref<TeamEvent | null>(null)
+const eventsTab = ref<'active' | 'canceled'>('active')
 const eventTypes: EventType[] = ['TRAINING', 'MATCH', 'OTHER']
 const attendanceModeOptions = computed(() => [
   { label: t('event.attendanceModeLabel.OPEN_TO_TEAM'), value: 'OPEN_TO_TEAM' as AttendanceMode },
   { label: t('event.attendanceModeLabel.INVITE_ONLY'), value: 'INVITE_ONLY' as AttendanceMode },
 ])
 const editScope = ref<EventChangeScope>('SINGLE')
-const deleteScope = ref<EventChangeScope>('SINGLE')
+const cancelScope = ref<EventChangeScope>('SINGLE')
+const restoreScope = ref<EventChangeScope>('SINGLE')
 const memberOptions = ref<TeamMembershipOption[]>([])
 const scopeOptions = computed(() => [
   { label: t('event.applySingle'), value: 'SINGLE' as const },
@@ -434,6 +507,7 @@ async function loadEvents() {
         id
         title
         eventType
+        status
         attendanceMode
         startTime
         endTime
@@ -449,6 +523,34 @@ async function loadEvents() {
     { teamId }
   )
   teamEvents.value = eventsData.teamEvents
+
+  if (!team.value?.viewerCanManage) {
+    canceledEvents.value = []
+    return
+  }
+
+  const canceledData = await gqlRequest<{ canceledTeamEvents: TeamEvent[] }>(
+    `
+    query($teamId: ID!) {
+      canceledTeamEvents(teamId: $teamId) {
+        id
+        title
+        eventType
+        status
+        attendanceMode
+        startTime
+        endTime
+        seriesId
+        location
+        note
+        maxPlayers
+        maxGoalies
+      }
+    }
+    `,
+    { teamId }
+  )
+  canceledEvents.value = canceledData.canceledTeamEvents
 }
 
 async function loadMemberOptions() {
@@ -647,37 +749,71 @@ async function saveEventEdit() {
   }
 }
 
-function openDeleteDialog(event: TeamEvent) {
+function openCancelDialog(event: TeamEvent) {
   selectedEvent.value = event
-  deleteScope.value = 'SINGLE'
-  deleteDialog.value = true
+  cancelScope.value = 'SINGLE'
+  cancelDialog.value = true
 }
 
-async function deleteEventWithScope() {
+function openRestoreDialog(event: TeamEvent) {
+  selectedEvent.value = event
+  restoreScope.value = 'SINGLE'
+  restoreDialog.value = true
+}
+
+async function cancelEventWithScope() {
   const event = selectedEvent.value
   if (!event) return
-  deleteLoading.value = true
+  cancelLoading.value = true
   try {
-    const res = await gqlRequest<{ deleteEvent: boolean }>(
+    const res = await gqlRequest<{ cancelEvent: boolean }>(
       `
       mutation($eventId: ID!, $scope: EventChangeScope!) {
-        deleteEvent(eventId: $eventId, scope: $scope)
+        cancelEvent(eventId: $eventId, scope: $scope)
       }
       `,
       {
         eventId: event.id,
-        scope: event.seriesId ? deleteScope.value : 'SINGLE',
+        scope: event.seriesId ? cancelScope.value : 'SINGLE',
       }
     )
-    if (!res.deleteEvent) throw new Error(t('event.deleteFailed'))
-    deleteDialog.value = false
+    if (!res.cancelEvent) throw new Error(t('event.cancelFailed'))
+    cancelDialog.value = false
     selectedEvent.value = null
     await loadEvents()
-    $q.notify({ type: 'positive', message: t('event.deleteSuccess') })
+    $q.notify({ type: 'positive', message: t('event.cancelSuccess') })
   } catch (err) {
-    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.deleteFailed') })
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.cancelFailed') })
   } finally {
-    deleteLoading.value = false
+    cancelLoading.value = false
+  }
+}
+
+async function restoreEventWithScope() {
+  const event = selectedEvent.value
+  if (!event) return
+  restoreLoading.value = true
+  try {
+    const res = await gqlRequest<{ restoreEvent: boolean }>(
+      `
+      mutation($eventId: ID!, $scope: EventChangeScope!) {
+        restoreEvent(eventId: $eventId, scope: $scope)
+      }
+      `,
+      {
+        eventId: event.id,
+        scope: event.seriesId ? restoreScope.value : 'SINGLE',
+      }
+    )
+    if (!res.restoreEvent) throw new Error(t('event.restoreFailed'))
+    restoreDialog.value = false
+    selectedEvent.value = null
+    await loadEvents()
+    $q.notify({ type: 'positive', message: t('event.restoreSuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.restoreFailed') })
+  } finally {
+    restoreLoading.value = false
   }
 }
 
