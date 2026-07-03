@@ -394,6 +394,29 @@
                     jerseyNumber: membership.jerseyNumber ?? '-'
                   }) }}
                 </q-item-label>
+                <div
+                  v-if="auth.isSuperAdmin && membership.membershipStatus === 'APPROVED'"
+                  class="row items-center q-gutter-sm q-mt-sm"
+                >
+                  <q-select
+                    v-model="selectedTeamRoles[membership.teamId]"
+                    dense
+                    outlined
+                    emit-value
+                    map-options
+                    :options="teamRoleOptions"
+                    :label="t('adminHome.teamRoleLabel')"
+                    :disable="!!teamRoleSaving[membership.teamId]"
+                    style="min-width: 160px"
+                  />
+                  <q-btn
+                    color="primary"
+                    :label="t('common.save')"
+                    :loading="!!teamRoleSaving[membership.teamId]"
+                    :disable="!selectedTeamRoles[membership.teamId] || selectedTeamRoles[membership.teamId] === membership.teamRole"
+                    @click="updateSelectedUserTeamRole(membership)"
+                  />
+                </div>
               </q-item-section>
             </q-item>
             <q-item v-if="!selectedUserDetail.teams.length">
@@ -536,6 +559,8 @@ const selectedUserRole = ref<string | null>(null)
 const selectedUserAccountStatus = ref<'ACTIVE' | 'BLOCKED' | null>(null)
 const userRoleSaving = ref(false)
 const userStatusSaving = ref(false)
+const teamRoleSaving = reactive<Record<string, boolean>>({})
+const selectedTeamRoles = reactive<Record<string, string>>({})
 const userHardDeleteSaving = ref(false)
 const userHardDeleteConfirmVisible = ref(false)
 const userHardDeleteConfirmEmail = ref('')
@@ -543,6 +568,10 @@ const userRoleOptions = [
   { label: 'USER', value: 'USER' },
   { label: 'ADMIN', value: 'ADMIN' },
   { label: 'SUPER_ADMIN', value: 'SUPER_ADMIN' },
+] as const
+const teamRoleOptions = [
+  { label: 'MEMBER', value: 'MEMBER' },
+  { label: 'ADMIN', value: 'ADMIN' },
 ] as const
 const accountStatusOptions = [
   { label: 'ACTIVE', value: 'ACTIVE' },
@@ -764,6 +793,7 @@ async function openUserDetail(userId: string) {
     selectedUserDetail.value = data.adminUserDetail
     selectedUserRole.value = data.adminUserDetail.role
     selectedUserAccountStatus.value = data.adminUserDetail.accountStatus
+    syncSelectedTeamRoles(data.adminUserDetail)
     userHardDeleteConfirmVisible.value = false
     userHardDeleteConfirmEmail.value = ''
   } catch (err) {
@@ -781,10 +811,25 @@ function resetUserDetailState() {
   selectedUserDetail.value = null
   selectedUserRole.value = null
   selectedUserAccountStatus.value = null
+  clearRecord(selectedTeamRoles)
+  clearRecord(teamRoleSaving)
   userHardDeleteConfirmVisible.value = false
   userHardDeleteConfirmEmail.value = ''
   userDetailLoading.value = false
   userHardDeleteSaving.value = false
+}
+
+function clearRecord<T>(record: Record<string, T>) {
+  Object.keys(record).forEach((key) => {
+    delete record[key]
+  })
+}
+
+function syncSelectedTeamRoles(userDetail: AdminUserDetail) {
+  clearRecord(selectedTeamRoles)
+  userDetail.teams.forEach((membership) => {
+    selectedTeamRoles[membership.teamId] = membership.teamRole
+  })
 }
 
 function closeUserDetailDialog() {
@@ -835,6 +880,7 @@ async function updateSelectedUserRole() {
     )
     selectedUserDetail.value = data.adminUpdateUserRole
     selectedUserRole.value = data.adminUpdateUserRole.role
+    syncSelectedTeamRoles(data.adminUpdateUserRole)
     await auth.refreshMe()
     await loadAllUsers()
     $q.notify({ type: 'positive', message: t('adminHome.userRoleUpdateSuccess') })
@@ -886,6 +932,7 @@ async function updateSelectedUserAccountStatus() {
     )
     selectedUserDetail.value = data.adminUpdateAccountStatus
     selectedUserAccountStatus.value = data.adminUpdateAccountStatus.accountStatus
+    syncSelectedTeamRoles(data.adminUpdateAccountStatus)
     await auth.refreshMe()
     await loadAllUsers()
     $q.notify({ type: 'positive', message: t('adminHome.userStatusUpdateSuccess') })
@@ -896,6 +943,38 @@ async function updateSelectedUserAccountStatus() {
     })
   } finally {
     userStatusSaving.value = false
+  }
+}
+
+async function updateSelectedUserTeamRole(membership: AdminUserMembershipDetail) {
+  const user = selectedUserDetail.value
+  const nextRole = selectedTeamRoles[membership.teamId]
+  if (!user || !nextRole || nextRole === membership.teamRole) return
+
+  teamRoleSaving[membership.teamId] = true
+  try {
+    const data = await gqlRequest<{ adminUpdateTeamMembershipRole: boolean }>(
+      `
+      mutation($teamId: ID!, $userId: ID!, $role: TeamRole!) {
+        adminUpdateTeamMembershipRole(teamId: $teamId, userId: $userId, role: $role)
+      }
+      `,
+      { teamId: membership.teamId, userId: user.id, role: nextRole }
+    )
+    if (!data.adminUpdateTeamMembershipRole) throw new Error(t('adminHome.teamRoleUpdateFailed'))
+    membership.teamRole = nextRole
+    selectedTeamRoles[membership.teamId] = nextRole
+    await auth.refreshMe()
+    await loadAllUsers()
+    $q.notify({ type: 'positive', message: t('adminHome.teamRoleUpdateSuccess') })
+  } catch (err) {
+    selectedTeamRoles[membership.teamId] = membership.teamRole
+    $q.notify({
+      type: 'negative',
+      message: err instanceof Error ? err.message : t('adminHome.teamRoleUpdateFailed'),
+    })
+  } finally {
+    teamRoleSaving[membership.teamId] = false
   }
 }
 
