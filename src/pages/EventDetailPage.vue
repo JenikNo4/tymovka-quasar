@@ -225,6 +225,22 @@
           {{ t('event.noActivityLogs') }}
         </div>
       </q-card-section>
+
+      <q-card-section v-if="event.viewerCanViewLogs">
+        <NotificationDeliveryTable
+          :title="t('event.deliveryTitle')"
+          :subtitle="t('event.deliverySubtitle')"
+          :empty-text="t('event.noDeliveries')"
+          :deliveries="notificationDeliveries"
+          :loading="deliveryLoading"
+          :page="deliveryPage"
+          :total-pages="deliveryTotalPages"
+          :total-elements="deliveryTotalElements"
+          @refresh="loadNotificationDeliveries"
+          @prev="prevDeliveryPage"
+          @next="nextDeliveryPage"
+        />
+      </q-card-section>
     </q-card>
   </q-page>
 </template>
@@ -235,6 +251,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from 'src/stores/useAuth'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
+import NotificationDeliveryTable from 'src/components/NotificationDeliveryTable.vue'
+import type { NotificationDelivery } from 'src/types/notification-delivery'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type ParticipantStatus = 'INVITED' | 'GOING' | 'MAYBE' | 'WAITLIST' | 'DECLINED'
@@ -281,6 +299,13 @@ type EventItem = {
   logs: EventLogItem[]
 }
 type TeamMembershipOption = { membershipId: string; label: string }
+type NotificationDeliveryPage = {
+  items: NotificationDelivery[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -299,6 +324,12 @@ const detailMemberOptions = ref<TeamMembershipOption[]>([])
 const addMembershipIds = ref<string[]>([])
 const guestDisplayName = ref('')
 const guestPlayerRole = ref<'PLAYER' | 'GOALKEEPER'>('PLAYER')
+const notificationDeliveries = ref<NotificationDelivery[]>([])
+const deliveryLoading = ref(false)
+const deliveryPage = ref(0)
+const deliveryPageSize = ref(25)
+const deliveryTotalElements = ref(0)
+const deliveryTotalPages = ref(0)
 const participantStatuses: ParticipantStatus[] = ['INVITED', 'GOING', 'MAYBE', 'DECLINED']
 const guestRoleOptions = computed(() => [
   { label: t('teamDetail.playerRolePlayer'), value: 'PLAYER' },
@@ -480,11 +511,72 @@ async function loadEvent() {
     if (!data.event) throw new Error(t('event.eventNotFound'))
     event.value = data.event
     await loadTeamMemberOptions(data.event.team.id)
+    if (data.event.viewerCanViewLogs) {
+      await loadNotificationDeliveries()
+    } else {
+      notificationDeliveries.value = []
+    }
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : t('event.detailLoadFailed')
   } finally {
     loading.value = false
   }
+}
+
+async function loadNotificationDeliveries() {
+  if (!event.value?.viewerCanViewLogs) return
+  deliveryLoading.value = true
+  try {
+    const data = await gqlRequest<{ eventNotificationDeliveries: NotificationDeliveryPage }>(
+      `
+      query($eventId: ID!, $page: Int, $size: Int) {
+        eventNotificationDeliveries(eventId: $eventId, page: $page, size: $size) {
+          items {
+            id
+            channel
+            type
+            status
+            recipientEmail
+            teamId
+            eventId
+            seriesId
+            groupKey
+            attemptCount
+            lastError
+            createdAt
+            sentAt
+            lastAttemptAt
+          }
+          totalElements
+          totalPages
+          page
+          size
+        }
+      }
+      `,
+      { eventId, page: deliveryPage.value, size: deliveryPageSize.value }
+    )
+    notificationDeliveries.value = data.eventNotificationDeliveries.items
+    deliveryTotalElements.value = data.eventNotificationDeliveries.totalElements
+    deliveryTotalPages.value = data.eventNotificationDeliveries.totalPages
+    deliveryPage.value = data.eventNotificationDeliveries.page
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('event.deliveryLoadFailed') })
+  } finally {
+    deliveryLoading.value = false
+  }
+}
+
+function prevDeliveryPage() {
+  if (deliveryPage.value <= 0) return
+  deliveryPage.value -= 1
+  void loadNotificationDeliveries()
+}
+
+function nextDeliveryPage() {
+  if (deliveryPage.value + 1 >= deliveryTotalPages.value) return
+  deliveryPage.value += 1
+  void loadNotificationDeliveries()
 }
 
 async function setMyAttendance(status: ParticipantStatus) {

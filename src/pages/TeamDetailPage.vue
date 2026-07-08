@@ -181,58 +181,15 @@
       </q-list>
     </q-card>
 
-    <q-card v-if="team?.viewerCanManage" bordered flat>
-      <q-card-section class="row items-center justify-between">
-        <div>
-          <div class="text-subtitle1">{{ t('teamDetail.deliveryTitle') }}</div>
-          <div class="text-caption text-grey-7">{{ t('teamDetail.deliverySubtitle') }}</div>
-        </div>
-        <q-btn
-          flat
-          dense
-          icon="refresh"
-          :label="t('common.refresh')"
-          :loading="deliveryLoading"
-          @click="loadNotificationDeliveries"
-        />
-      </q-card-section>
-      <q-separator />
-      <q-card-section v-if="!notificationDeliveries.length">
-        <div class="text-caption text-grey-7">{{ t('teamDetail.noDeliveries') }}</div>
-      </q-card-section>
-      <q-markup-table v-else flat bordered dense>
-        <thead>
-          <tr>
-            <th class="text-left">{{ t('teamDetail.deliveryCreatedAt') }}</th>
-            <th class="text-left">{{ t('teamDetail.deliveryType') }}</th>
-            <th class="text-left">{{ t('teamDetail.deliveryChannel') }}</th>
-            <th class="text-left">{{ t('teamDetail.deliveryRecipient') }}</th>
-            <th class="text-left">{{ t('teamDetail.deliveryStatus') }}</th>
-            <th class="text-left">{{ t('teamDetail.deliveryAttempts') }}</th>
-            <th class="text-left">{{ t('teamDetail.deliveryLastError') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="delivery in notificationDeliveries" :key="delivery.id">
-            <td>{{ formatDateTime(delivery.createdAt) }}</td>
-            <td>{{ delivery.type }}</td>
-            <td>
-              <q-chip dense square :color="deliveryChannelColor(delivery.channel)" text-color="white">
-                {{ delivery.channel }}
-              </q-chip>
-            </td>
-            <td>{{ delivery.recipientEmail || '-' }}</td>
-            <td>
-              <q-chip dense square :color="deliveryStatusColor(delivery.status)" text-color="white">
-                {{ delivery.status }}
-              </q-chip>
-            </td>
-            <td>{{ delivery.attemptCount }}</td>
-            <td class="delivery-error-cell">{{ delivery.lastError || '-' }}</td>
-          </tr>
-        </tbody>
-      </q-markup-table>
-    </q-card>
+    <NotificationDeliveryTable
+      v-if="team?.viewerCanManage"
+      :title="t('teamDetail.deliveryTitle')"
+      :subtitle="t('teamDetail.deliverySubtitle')"
+      :empty-text="t('teamDetail.noDeliveries')"
+      :deliveries="notificationDeliveries"
+      :loading="deliveryLoading"
+      @refresh="loadNotificationDeliveries"
+    />
 
     <q-dialog v-model="createDialog">
       <q-card style="min-width: 460px; max-width: 96vw;">
@@ -307,6 +264,8 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
+import NotificationDeliveryTable from 'src/components/NotificationDeliveryTable.vue'
+import type { NotificationDelivery } from 'src/types/notification-delivery'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type TeamDetail = {
@@ -344,24 +303,6 @@ type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
 type AttendanceMode = 'INVITE_ONLY' | 'OPEN_TO_TEAM'
 type TeamRole = 'ADMIN' | 'MEMBER'
 type TeamMembershipOption = { membershipId: string; label: string }
-type NotificationDeliveryChannel = 'EMAIL' | 'PUSH'
-type NotificationDeliveryStatus = 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED_DUPLICATE' | 'NOT_IMPLEMENTED'
-type NotificationDelivery = {
-  id: string
-  channel: NotificationDeliveryChannel
-  type: string
-  status: NotificationDeliveryStatus
-  recipientEmail?: string | null
-  teamId?: string | null
-  eventId?: string | null
-  seriesId?: string | null
-  groupKey?: string | null
-  attemptCount: number
-  lastError?: string | null
-  createdAt: string
-  sentAt?: string | null
-  lastAttemptAt?: string | null
-}
 
 const route = useRoute()
 const router = useRouter()
@@ -480,25 +421,6 @@ function toIsoOrNull(localValue: string): string | null {
 
 function requiredLabel(label: string): string {
   return `${label} *`
-}
-
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString()
-}
-
-function deliveryStatusColor(status: NotificationDeliveryStatus): string {
-  if (status === 'SENT') return 'positive'
-  if (status === 'FAILED') return 'negative'
-  if (status === 'NOT_IMPLEMENTED') return 'grey-7'
-  if (status === 'SKIPPED_DUPLICATE') return 'warning'
-  return 'primary'
-}
-
-function deliveryChannelColor(channel: NotificationDeliveryChannel): string {
-  return channel === 'PUSH' ? 'teal-7' : 'blue-7'
 }
 
 const INVALID_CAPACITY = Symbol('INVALID_CAPACITY')
@@ -923,12 +845,3 @@ onMounted(async () => {
   await loadTeamDetail()
 })
 </script>
-
-<style scoped>
-.delivery-error-cell {
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-</style>
