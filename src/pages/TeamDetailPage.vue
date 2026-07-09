@@ -213,6 +213,24 @@
           <q-input v-model="createForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="createForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="createForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
+          <q-card flat bordered class="q-pa-sm">
+            <div class="text-subtitle2 q-mb-xs">{{ t('event.remindersTitle') }}</div>
+            <div class="text-caption text-grey-7 q-mb-sm">{{ t('event.remindersHint') }}</div>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderOneDayEnabled" :label="t('event.reminderOneDay')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderThreeDaysEnabled" :label="t('event.reminderThreeDays')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderEmailEnabled" :label="t('event.reminderEmail')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderPushEnabled" disable :label="t('event.reminderPush')" />
+              </div>
+            </div>
+          </q-card>
           <q-select
             v-model="createForm.attendanceMode"
             :options="attendanceModeOptions"
@@ -346,6 +364,10 @@ const createForm = ref({
   note: '',
   maxPlayers: '20',
   maxGoalies: '2',
+  reminderOneDayEnabled: true,
+  reminderThreeDaysEnabled: false,
+  reminderEmailEnabled: true,
+  reminderPushEnabled: false,
   attendanceMode: 'OPEN_TO_TEAM' as AttendanceMode,
   inviteAllMembers: true,
   invitedMembershipIds: [] as string[],
@@ -403,6 +425,10 @@ function openCreateEventDialog() {
     note: '',
     maxPlayers: '20',
     maxGoalies: '2',
+    reminderOneDayEnabled: true,
+    reminderThreeDaysEnabled: false,
+    reminderEmailEnabled: true,
+    reminderPushEnabled: false,
     attendanceMode: 'OPEN_TO_TEAM',
     inviteAllMembers: true,
     invitedMembershipIds: [],
@@ -498,6 +524,10 @@ async function createEventForTeam() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
+            reminderOneDayEnabled: createForm.value.reminderOneDayEnabled,
+            reminderThreeDaysEnabled: createForm.value.reminderThreeDaysEnabled,
+            reminderEmailEnabled: createForm.value.reminderEmailEnabled,
+            reminderPushEnabled: createForm.value.reminderPushEnabled,
             attendanceMode: createForm.value.attendanceMode,
             inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
             invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
@@ -525,6 +555,10 @@ async function createEventForTeam() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
+            reminderOneDayEnabled: createForm.value.reminderOneDayEnabled,
+            reminderThreeDaysEnabled: createForm.value.reminderThreeDaysEnabled,
+            reminderEmailEnabled: createForm.value.reminderEmailEnabled,
+            reminderPushEnabled: createForm.value.reminderPushEnabled,
             attendanceMode: createForm.value.attendanceMode,
             inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
             invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
