@@ -101,7 +101,7 @@
       <q-card-section v-if="inviteResult">
         <div class="text-caption">{{ t('teamDetail.inviteSummaryCreated') }}: {{ inviteResult.invitedCount }}</div>
         <div class="text-caption">{{ t('teamDetail.inviteSummaryExisting') }}: {{ inviteResult.existingMembers.join(', ') || '-' }}</div>
-        <div class="text-caption">{{ t('teamDetail.inviteSummaryPending') }}: {{ inviteResult.pendingAlready.join(', ') || '-' }}</div>
+        <div class="text-caption">{{ t('teamDetail.inviteSummaryResent') }}: {{ inviteResult.resent.join(', ') || '-' }}</div>
         <div class="text-caption">{{ t('teamDetail.inviteSummaryInvalid') }}: {{ inviteResult.invalidEmails.join(', ') || '-' }}</div>
         <div class="text-caption">{{ t('teamDetail.inviteSummaryDuplicates') }}: {{ inviteResult.duplicates.join(', ') || '-' }}</div>
       </q-card-section>
@@ -313,7 +313,8 @@ type InviteResult = {
   invitedCount: number
   createdInvites: string[]
   existingMembers: string[]
-  pendingAlready: string[]
+  // Uz meli pending pozvanku -> backend ji poslal znovu (email + notifikace)
+  resent: string[]
   invalidEmails: string[]
   duplicates: string[]
 }
@@ -852,7 +853,7 @@ async function inviteMembers() {
           invitedCount
           createdInvites
           existingMembers
-          pendingAlready
+          resent
           invalidEmails
           duplicates
         }
