@@ -29,7 +29,12 @@
     </q-banner>
 
     <q-list v-if="notifications.length" bordered separator>
-      <q-item v-for="n in notifications" :key="n.id">
+      <q-item
+        v-for="n in notifications"
+        :key="n.id"
+        :clickable="canOpenEvent(n)"
+        @click="openEvent(n)"
+      >
         <q-item-section>
           <q-item-label class="text-weight-medium">
             {{ n.title || t('notifications.teamInviteTitle') }}
@@ -53,7 +58,7 @@
               :label="t('notifications.acceptInvite')"
               :disable="!n.actionAvailable || isActionLoading(n.id)"
               :loading="actionLoadingId === `${n.id}:accept`"
-              @click="acceptInvite(n.id, n.teamId)"
+              @click.stop="acceptInvite(n.id, n.teamId)"
             />
             <q-btn
               v-if="n.type === 'TEAM_INVITE' && n.teamId"
@@ -63,7 +68,7 @@
               :label="t('notifications.declineInvite')"
               :disable="!n.actionAvailable || isActionLoading(n.id)"
               :loading="actionLoadingId === `${n.id}:decline`"
-              @click="declineInvite(n.id, n.teamId)"
+              @click.stop="declineInvite(n.id, n.teamId)"
             />
             <q-btn
               v-if="n.type !== 'TEAM_INVITE'"
@@ -73,7 +78,7 @@
               :label="t('notifications.ok')"
               :disable="!n.actionAvailable || isActionLoading(n.id)"
               :loading="actionLoadingId === `${n.id}:ok`"
-              @click="ackNotification(n.id)"
+              @click.stop="ackNotification(n.id)"
             />
             <q-btn
               dense
@@ -84,7 +89,7 @@
               :title="t('notifications.delete')"
               :disable="isActionLoading(n.id)"
               :loading="actionLoadingId === `${n.id}:delete`"
-              @click="deleteNotification(n.id)"
+              @click.stop="deleteNotification(n.id)"
             />
           </div>
         </q-item-section>
@@ -102,17 +107,20 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useQuasar } from 'quasar'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuth } from 'src/stores/useAuth'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type NotificationType =
   | 'TEAM_INVITE'
+  | 'EVENT_INVITE'
   | 'EVENT_INVITE_MATCH'
   | 'EVENT_SERIES_INVITE_DIGEST'
   | 'EVENT_UPDATED'
   | 'EVENT_UPDATED_EARLIER'
   | 'EVENT_CANCELED'
+  | 'EVENT_REMINDER'
 type NotificationResolution = 'ACCEPTED' | 'DECLINED' | 'DISMISSED' | 'AUTO_RESOLVED'
 
 type NotificationItem = {
@@ -127,11 +135,13 @@ type NotificationItem = {
   resolvedAt?: string | null
   createdAt: string
   teamId?: string | null
+  eventId?: string | null
 }
 
 const $q = useQuasar()
 const { t } = useI18n()
 const auth = useAuth()
+const router = useRouter()
 
 const notifications = ref<NotificationItem[]>([])
 const errorMessage = ref('')
@@ -188,6 +198,7 @@ async function loadNotifications() {
           resolvedAt
           createdAt
           teamId
+          eventId
         }
       }
       `
@@ -196,6 +207,27 @@ async function loadNotifications() {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('notifications.loadFailed')
   }
+}
+
+// Zrušený event backend v detailu nevrací (soft delete) — proklik nemá kam vést
+function canOpenEvent(n: NotificationItem): boolean {
+  return !!n.eventId && n.type !== 'EVENT_CANCELED'
+}
+
+// Otevření eventu notifikaci tiše označí jako přečtenou; navigace na mutaci nečeká
+function openEvent(n: NotificationItem) {
+  if (!canOpenEvent(n) || !n.eventId) return
+  if (!n.readAt) {
+    gqlRequest<{ markNotificationsRead: boolean }>(
+      `
+      mutation($notificationIds: [ID!]!) {
+        markNotificationsRead(notificationIds: $notificationIds)
+      }
+      `,
+      { notificationIds: [n.id] }
+    ).catch(() => {})
+  }
+  void router.push({ name: 'eventDetail', params: { id: n.eventId } })
 }
 
 async function markAllRead() {
