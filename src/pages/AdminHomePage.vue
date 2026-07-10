@@ -24,6 +24,7 @@
       <q-tabs v-model="activeTab" dense align="left" active-color="primary" indicator-color="primary">
         <q-tab name="teams" :label="t('adminHome.tabTeams')" />
         <q-tab name="players" :label="t('adminHome.tabPlayers')" />
+        <q-tab v-if="auth.isSuperAdmin" name="deliveries" :label="t('adminHome.tabDeliveries')" />
       </q-tabs>
       <q-separator />
 
@@ -271,6 +272,78 @@
             {{ t('adminHome.playersSuperAdminOnly') }}
           </q-banner>
         </q-tab-panel>
+
+        <q-tab-panel v-if="auth.isSuperAdmin" name="deliveries">
+          <q-card bordered flat class="q-mb-md">
+            <q-card-section>
+              <div class="row q-col-gutter-sm items-end">
+                <div class="col-12 col-md-3">
+                  <q-input
+                    v-model="deliveryEmailFilter"
+                    dense
+                    outlined
+                    clearable
+                    :label="t('adminHome.deliveryRecipientFilter')"
+                    @keyup.enter="applyDeliverySearch"
+                  />
+                </div>
+                <div class="col-12 col-md-3">
+                  <q-select
+                    v-model="deliveryStatusFilter"
+                    dense
+                    outlined
+                    clearable
+                    emit-value
+                    map-options
+                    :options="deliveryStatusOptions"
+                    :label="t('teamDetail.deliveryStatus')"
+                  />
+                </div>
+                <div class="col-12 col-md-2">
+                  <q-select
+                    v-model="deliveryChannelFilter"
+                    dense
+                    outlined
+                    clearable
+                    emit-value
+                    map-options
+                    :options="deliveryChannelOptions"
+                    :label="t('teamDetail.deliveryChannel')"
+                  />
+                </div>
+                <div class="col-12 col-md-3">
+                  <q-select
+                    v-model="deliveryTypeFilter"
+                    dense
+                    outlined
+                    clearable
+                    emit-value
+                    map-options
+                    :options="deliveryTypeOptions"
+                    :label="t('teamDetail.deliveryType')"
+                  />
+                </div>
+                <div class="col-12 col-md-1">
+                  <q-btn color="primary" icon="search" :loading="deliveryLoading" @click="applyDeliverySearch" />
+                </div>
+              </div>
+            </q-card-section>
+          </q-card>
+
+          <NotificationDeliveryTable
+            :title="t('adminHome.deliveryAuditTitle')"
+            :subtitle="t('adminHome.deliveryAuditHint')"
+            :empty-text="t('teamDetail.noDeliveries')"
+            :deliveries="notificationDeliveries"
+            :loading="deliveryLoading"
+            :page="deliveryPage"
+            :total-pages="deliveryTotalPages"
+            :total-elements="deliveryTotalElements"
+            @refresh="loadNotificationDeliveries"
+            @prev="prevDeliveryPage"
+            @next="nextDeliveryPage"
+          />
+        </q-tab-panel>
       </q-tab-panels>
     </q-card>
 
@@ -494,6 +567,8 @@ import { useAuth } from 'src/stores/useAuth'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useI18n } from 'vue-i18n'
+import NotificationDeliveryTable from 'src/components/NotificationDeliveryTable.vue'
+import type { NotificationDelivery } from 'src/types/notification-delivery'
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type TeamAdminCard = { id: string; name: string; description?: string | null; viewerCanDelete?: boolean }
@@ -521,6 +596,15 @@ type AdminUserDetail = AdminUserCard & {
   preferredPositions: string[]
   teams: AdminUserMembershipDetail[]
 }
+type NotificationDeliveryStatus = NotificationDelivery['status']
+type NotificationDeliveryChannel = NotificationDelivery['channel']
+type NotificationDeliveryPage = {
+  items: NotificationDelivery[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
 
 const auth = useAuth()
 const router = useRouter()
@@ -529,7 +613,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const errorMessage = ref('')
-const activeTab = ref<'teams' | 'players'>('teams')
+const activeTab = ref<'teams' | 'players' | 'deliveries'>('teams')
 const nameFilter = ref('')
 const usersFilter = ref('')
 const allTeams = ref<TeamAdminCard[]>([])
@@ -550,6 +634,16 @@ const usersPage = ref(0)
 const usersPageSize = ref(25)
 const usersTotalElements = ref(0)
 const usersTotalPages = ref(0)
+const notificationDeliveries = ref<NotificationDelivery[]>([])
+const deliveryLoading = ref(false)
+const deliveryPage = ref(0)
+const deliveryPageSize = ref(25)
+const deliveryTotalElements = ref(0)
+const deliveryTotalPages = ref(0)
+const deliveryEmailFilter = ref('')
+const deliveryStatusFilter = ref<NotificationDeliveryStatus | null>('FAILED')
+const deliveryChannelFilter = ref<NotificationDeliveryChannel | null>(null)
+const deliveryTypeFilter = ref<string | null>(null)
 const teamActionLoading = reactive<Record<string, 'delete' | 'restore' | 'purge' | undefined>>({})
 const userDetailDialog = ref(false)
 const userDetailDialogRef = ref<{ hide: () => void } | null>(null)
@@ -577,6 +671,18 @@ const accountStatusOptions = [
   { label: 'ACTIVE', value: 'ACTIVE' },
   { label: 'BLOCKED', value: 'BLOCKED' },
 ] as const
+const deliveryStatusOptions = ['FAILED', 'SENT', 'PENDING', 'SKIPPED_DUPLICATE', 'NOT_IMPLEMENTED'].map((value) => ({ label: value, value }))
+const deliveryChannelOptions = ['EMAIL', 'PUSH'].map((value) => ({ label: value, value }))
+const deliveryTypeOptions = [
+  'TEAM_INVITE',
+  'EVENT_INVITE',
+  'EVENT_INVITE_MATCH',
+  'EVENT_SERIES_INVITE_DIGEST',
+  'EVENT_UPDATED',
+  'EVENT_UPDATED_EARLIER',
+  'EVENT_CANCELED',
+  'EVENT_REMINDER',
+].map((value) => ({ label: value, value }))
 
 const manageableTeams = computed(() =>
   (auth.user?.teams ?? [])
@@ -718,6 +824,58 @@ async function loadAllUsers() {
   usersPageSize.value = data.adminUsers.size
 }
 
+async function loadNotificationDeliveries() {
+  if (!auth.isSuperAdmin) return
+  deliveryLoading.value = true
+  try {
+    const filter: Record<string, unknown> = {}
+    const email = deliveryEmailFilter.value.trim()
+    if (email) filter.recipientEmail = email
+    if (deliveryStatusFilter.value) filter.status = deliveryStatusFilter.value
+    if (deliveryChannelFilter.value) filter.channel = deliveryChannelFilter.value
+    if (deliveryTypeFilter.value) filter.type = deliveryTypeFilter.value
+
+    const data = await gqlRequest<{ adminNotificationDeliveries: NotificationDeliveryPage }>(
+      `
+      query($filter: NotificationDeliveryFilterInput, $page: Int, $size: Int) {
+        adminNotificationDeliveries(filter: $filter, page: $page, size: $size) {
+          items {
+            id
+            channel
+            type
+            status
+            recipientEmail
+            teamId
+            eventId
+            seriesId
+            groupKey
+            attemptCount
+            lastError
+            createdAt
+            sentAt
+            lastAttemptAt
+          }
+          totalElements
+          totalPages
+          page
+          size
+        }
+      }
+      `,
+      { filter, page: deliveryPage.value, size: deliveryPageSize.value }
+    )
+    notificationDeliveries.value = data.adminNotificationDeliveries.items
+    deliveryTotalElements.value = data.adminNotificationDeliveries.totalElements
+    deliveryTotalPages.value = data.adminNotificationDeliveries.totalPages
+    deliveryPage.value = data.adminNotificationDeliveries.page
+    deliveryPageSize.value = data.adminNotificationDeliveries.size
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('adminHome.deliveryLoadFailed') })
+  } finally {
+    deliveryLoading.value = false
+  }
+}
+
 async function loadAdminCapabilities() {
   if (!auth.isSuperAdmin) {
     adminCapabilities.hardDeleteUsersEnabled = false
@@ -744,6 +902,7 @@ async function loadAll() {
     await loadAllTeams()
     await loadArchivedTeams()
     await loadAllUsers()
+    await loadNotificationDeliveries()
   } catch (err) {
     errorMessage.value = err instanceof Error ? err.message : t('common.operationFailed')
   } finally {
@@ -1064,6 +1223,23 @@ function applyUsersSearch() {
   void loadAllUsers()
 }
 
+function applyDeliverySearch() {
+  deliveryPage.value = 0
+  void loadNotificationDeliveries()
+}
+
+function nextDeliveryPage() {
+  if ((deliveryPage.value + 1) >= deliveryTotalPages.value) return
+  deliveryPage.value += 1
+  void loadNotificationDeliveries()
+}
+
+function prevDeliveryPage() {
+  if (deliveryPage.value <= 0) return
+  deliveryPage.value -= 1
+  void loadNotificationDeliveries()
+}
+
 function nextUsersPage() {
   if ((usersPage.value + 1) >= usersTotalPages.value) return
   usersPage.value += 1
@@ -1209,7 +1385,7 @@ function deleteManagedTeam(teamId: string, teamName: string) {
 
 onMounted(async () => {
   const savedActiveTab = sessionStorage.getItem('tymovka.admin.activeTab')
-  if (savedActiveTab === 'teams' || savedActiveTab === 'players') {
+  if (savedActiveTab === 'teams' || savedActiveTab === 'players' || (savedActiveTab === 'deliveries' && auth.isSuperAdmin)) {
     activeTab.value = savedActiveTab
     sessionStorage.removeItem('tymovka.admin.activeTab')
   }

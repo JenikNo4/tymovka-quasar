@@ -2,15 +2,26 @@
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
       <div class="text-h5">{{ t('notifications.title') }}</div>
-      <q-btn
-        flat
-        color="primary"
-        icon="done_all"
-        :label="t('notifications.markAllRead')"
-        :disable="!notifications.length || markReadLoading"
-        :loading="markReadLoading"
-        @click="markAllRead"
-      />
+      <div class="row q-gutter-sm">
+        <q-btn
+          flat
+          color="grey-7"
+          icon="delete_sweep"
+          :label="t('notifications.deleteRead')"
+          :disable="!notifications.some(n => n.readAt) || deleteReadLoading"
+          :loading="deleteReadLoading"
+          @click="deleteRead"
+        />
+        <q-btn
+          flat
+          color="primary"
+          icon="done_all"
+          :label="t('notifications.markAllRead')"
+          :disable="!notifications.length || markReadLoading"
+          :loading="markReadLoading"
+          @click="markAllRead"
+        />
+      </div>
     </div>
 
     <q-banner v-if="errorMessage" class="bg-negative text-white q-mb-md">
@@ -64,6 +75,17 @@
               :loading="actionLoadingId === `${n.id}:ok`"
               @click="ackNotification(n.id)"
             />
+            <q-btn
+              dense
+              flat
+              round
+              color="grey-6"
+              icon="close"
+              :title="t('notifications.delete')"
+              :disable="isActionLoading(n.id)"
+              :loading="actionLoadingId === `${n.id}:delete`"
+              @click="deleteNotification(n.id)"
+            />
           </div>
         </q-item-section>
       </q-item>
@@ -114,6 +136,7 @@ const auth = useAuth()
 const notifications = ref<NotificationItem[]>([])
 const errorMessage = ref('')
 const markReadLoading = ref(false)
+const deleteReadLoading = ref(false)
 const actionLoadingId = ref('')
 
 async function gqlRequest<T>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
@@ -258,6 +281,57 @@ async function declineInvite(notificationId: string, teamId: string) {
     })
   } finally {
     actionLoadingId.value = ''
+  }
+}
+
+// Soft delete na backendu; smazání pending pozvánky ji neodmítá — admin ji může
+// poslat znovu a přijmout jde i ze seznamu „Moje týmy".
+async function deleteNotification(notificationId: string) {
+  actionLoadingId.value = `${notificationId}:delete`
+  try {
+    const data = await gqlRequest<{ deleteNotification: boolean }>(
+      `
+      mutation($notificationId: ID!) {
+        deleteNotification(notificationId: $notificationId)
+      }
+      `,
+      { notificationId }
+    )
+    if (!data.deleteNotification) throw new Error(t('notifications.deleteFailed'))
+    await loadNotifications()
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: error instanceof Error ? error.message : t('notifications.deleteFailed'),
+    })
+  } finally {
+    actionLoadingId.value = ''
+  }
+}
+
+// Maže přečtené kromě nevyřízených akčních (např. čekající pozvánky do týmu)
+async function deleteRead() {
+  deleteReadLoading.value = true
+  try {
+    const data = await gqlRequest<{ deleteReadNotifications: number }>(
+      `
+      mutation {
+        deleteReadNotifications
+      }
+      `
+    )
+    await loadNotifications()
+    $q.notify({
+      type: 'positive',
+      message: t('notifications.deleteReadSuccess', { count: data.deleteReadNotifications }),
+    })
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: error instanceof Error ? error.message : t('notifications.deleteFailed'),
+    })
+  } finally {
+    deleteReadLoading.value = false
   }
 }
 

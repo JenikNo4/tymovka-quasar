@@ -21,6 +21,26 @@
       <div class="row justify-end">
         <q-btn color="primary" :label="t('common.save')" :loading="saving" @click="saveProfile" />
       </div>
+
+      <q-separator />
+
+      <!-- Přepnutí se ukládá hned; in-app notifikace se nevypínají — jen email a push kanál -->
+      <div>
+        <div class="text-subtitle2">{{ t('profile.notificationsTitle') }}</div>
+        <div class="text-caption text-grey-7">{{ t('profile.notificationsHint') }}</div>
+        <q-toggle
+          :model-value="auth.user?.emailNotificationsEnabled ?? true"
+          :label="t('profile.notificationsEmail')"
+          :disable="prefsSaving"
+          @update:model-value="setNotificationPreference('email', $event)"
+        />
+        <q-toggle
+          :model-value="auth.user?.pushNotificationsEnabled ?? true"
+          :label="t('profile.notificationsPush')"
+          :disable="prefsSaving"
+          @update:model-value="setNotificationPreference('push', $event)"
+        />
+      </div>
     </q-card>
   </q-page>
 </template>
@@ -61,6 +81,25 @@ watch(
   },
   { immediate: true }
 )
+
+const prefsSaving = ref(false)
+
+async function setNotificationPreference(channel: 'email' | 'push', enabled: boolean) {
+  prefsSaving.value = true
+  try {
+    await auth.updateNotificationPreferences(
+      channel === 'email' ? enabled : null,
+      channel === 'push' ? enabled : null
+    )
+  } catch (error) {
+    $q.notify({
+      type: 'negative',
+      message: error instanceof Error ? error.message : t('profile.notificationsSaveFailed'),
+    })
+  } finally {
+    prefsSaving.value = false
+  }
+}
 
 async function saveProfile() {
   const selected = form.value.preferredPositions.length ? form.value.preferredPositions : ['PLAYER']

@@ -13,6 +13,41 @@
       <q-spinner color="primary" size="40px" />
     </q-inner-loading>
 
+    <!-- Týmy s PENDING členstvím — pozvánka jde přijmout/odmítnout přímo tady,
+         nezávisle na notifikaci (ta může být smazaná) -->
+    <div v-if="pendingInvites.length" class="q-mb-md">
+      <div class="text-subtitle1 text-weight-medium q-mb-sm">{{ t('team.pendingInvitesTitle') }}</div>
+      <div class="row q-col-gutter-md">
+        <div v-for="invite in pendingInvites" :key="invite.teamId" class="col-12 col-md-6 col-lg-4">
+          <q-card bordered flat class="bg-amber-1">
+            <q-card-section>
+              <div class="text-subtitle1 text-weight-medium">{{ invite.teamName }}</div>
+              <div class="text-caption text-grey-8 q-mt-xs">{{ t('team.pendingInviteLabel') }}</div>
+            </q-card-section>
+            <q-separator />
+            <q-card-actions align="right">
+              <q-btn
+                flat
+                color="positive"
+                :label="t('notifications.acceptInvite')"
+                :loading="inviteLoading[invite.teamId] === 'accept'"
+                :disable="!!inviteLoading[invite.teamId]"
+                @click="acceptInvite(invite)"
+              />
+              <q-btn
+                flat
+                color="negative"
+                :label="t('notifications.declineInvite')"
+                :loading="inviteLoading[invite.teamId] === 'decline'"
+                :disable="!!inviteLoading[invite.teamId]"
+                @click="declineInvite(invite)"
+              />
+            </q-card-actions>
+          </q-card>
+        </div>
+      </div>
+    </div>
+
     <div v-if="teams.length" class="row q-col-gutter-md">
       <div v-for="team in teams" :key="team.id" class="col-12 col-md-6 col-lg-4">
         <q-card bordered flat>
@@ -60,7 +95,7 @@
       </div>
     </div>
 
-    <q-banner v-else-if="!loading" class="bg-grey-2 q-pa-md">
+    <q-banner v-else-if="!loading && !pendingInvites.length" class="bg-grey-2 q-pa-md">
       {{ t('team.notInAnyTeam') }}
     </q-banner>
 
@@ -115,6 +150,8 @@ import { useI18n } from 'vue-i18n'
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
 type TeamMini = NonNullable<ReturnType<typeof useAuth>['user']>['teams'][number]
 type TeamOperation = 'leave' | 'delete'
+type PendingInvite = { teamId: string; teamName: string }
+type InviteOperation = 'accept' | 'decline'
 
 const $q = useQuasar()
 const auth = useAuth()
@@ -127,6 +164,8 @@ const createDialog = ref(false)
 const createLoading = ref(false)
 const actionLoading = reactive<Record<string, TeamOperation | undefined>>({})
 const createForm = reactive({ name: '', description: '' })
+const pendingInvites = ref<PendingInvite[]>([])
+const inviteLoading = reactive<Record<string, InviteOperation | undefined>>({})
 
 const teams = computed(() => auth.user?.teams ?? [])
 
@@ -150,10 +189,69 @@ async function loadTeams() {
   loadError.value = ''
   try {
     await auth.refreshMe()
+    await loadPendingInvites()
   } catch (err) {
     loadError.value = err instanceof Error ? err.message : t('team.loadFailed')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadPendingInvites() {
+  const data = await gqlRequest<{ myPendingMemberships: Array<{ team: { id: string; name: string } }> }>(
+    `
+    query {
+      myPendingMemberships {
+        team { id name }
+      }
+    }
+    `
+  )
+  pendingInvites.value = data.myPendingMemberships.map((m) => ({
+    teamId: m.team.id,
+    teamName: m.team.name,
+  }))
+}
+
+function acceptInvite(invite: PendingInvite) {
+  void runInviteAction(invite, 'accept', async () => {
+    const data = await gqlRequest<{ acceptTeamInvite: boolean }>(
+      `
+      mutation($teamId: ID!) {
+        acceptTeamInvite(teamId: $teamId)
+      }
+      `,
+      { teamId: invite.teamId }
+    )
+    if (!data.acceptTeamInvite) throw new Error(t('notifications.actionFailed'))
+    $q.notify({ type: 'positive', message: t('notifications.acceptSuccess') })
+  })
+}
+
+function declineInvite(invite: PendingInvite) {
+  void runInviteAction(invite, 'decline', async () => {
+    const data = await gqlRequest<{ declineTeamInvite: boolean }>(
+      `
+      mutation($teamId: ID!) {
+        declineTeamInvite(teamId: $teamId)
+      }
+      `,
+      { teamId: invite.teamId }
+    )
+    if (!data.declineTeamInvite) throw new Error(t('notifications.actionFailed'))
+    $q.notify({ type: 'positive', message: t('notifications.declineSuccess') })
+  })
+}
+
+async function runInviteAction(invite: PendingInvite, op: InviteOperation, action: () => Promise<void>) {
+  inviteLoading[invite.teamId] = op
+  try {
+    await action()
+    await loadTeams()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('common.operationFailed') })
+  } finally {
+    inviteLoading[invite.teamId] = undefined
   }
 }
 

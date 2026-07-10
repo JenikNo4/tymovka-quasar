@@ -157,6 +157,24 @@
           <q-input v-model="createForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="createForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="createForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
+          <q-card flat bordered class="q-pa-sm">
+            <div class="text-subtitle2 q-mb-xs">{{ t('event.remindersTitle') }}</div>
+            <div class="text-caption text-grey-7 q-mb-sm">{{ t('event.remindersHint') }}</div>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderOneDayEnabled" :label="t('event.reminderOneDay')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderThreeDaysEnabled" :label="t('event.reminderThreeDays')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderEmailEnabled" :label="t('event.reminderEmail')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="createForm.reminderPushEnabled" disable :label="t('event.reminderPush')" />
+              </div>
+            </div>
+          </q-card>
           <q-select
             v-model="createForm.attendanceMode"
             :options="attendanceModeOptions"
@@ -214,6 +232,24 @@
           <q-input v-model="editForm.note" outlined dense autogrow type="textarea" :label="t('event.noteOptional')" />
           <q-input v-model="editForm.maxPlayers" outlined dense type="number" min="0" :label="t('event.maxPlayers')" />
           <q-input v-model="editForm.maxGoalies" outlined dense type="number" min="0" :label="t('event.maxGoalies')" />
+          <q-card flat bordered class="q-pa-sm">
+            <div class="text-subtitle2 q-mb-xs">{{ t('event.remindersTitle') }}</div>
+            <div class="text-caption text-grey-7 q-mb-sm">{{ t('event.remindersHint') }}</div>
+            <div class="row q-col-gutter-md">
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="editForm.reminderOneDayEnabled" :label="t('event.reminderOneDay')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="editForm.reminderThreeDaysEnabled" :label="t('event.reminderThreeDays')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="editForm.reminderEmailEnabled" :label="t('event.reminderEmail')" />
+              </div>
+              <div class="col-12 col-sm-6">
+                <q-toggle v-model="editForm.reminderPushEnabled" disable :label="t('event.reminderPush')" />
+              </div>
+            </div>
+          </q-card>
           <q-select
             v-model="editForm.attendanceMode"
             :options="attendanceModeOptions"
@@ -314,6 +350,10 @@ type TeamEvent = {
   note?: string | null
   maxPlayers?: number | null
   maxGoalies?: number | null
+  reminderOneDayEnabled: boolean
+  reminderThreeDaysEnabled: boolean
+  reminderEmailEnabled: boolean
+  reminderPushEnabled: boolean
   viewerCanEdit?: boolean
 }
 type EventType = 'TRAINING' | 'MATCH' | 'OTHER'
@@ -374,6 +414,10 @@ const createForm = ref({
   note: '',
   maxPlayers: '20',
   maxGoalies: '2',
+  reminderOneDayEnabled: true,
+  reminderThreeDaysEnabled: false,
+  reminderEmailEnabled: true,
+  reminderPushEnabled: false,
   attendanceMode: 'OPEN_TO_TEAM' as AttendanceMode,
   inviteAllMembers: true,
   invitedMembershipIds: [] as string[],
@@ -389,6 +433,10 @@ const editForm = ref({
   note: '',
   maxPlayers: '20',
   maxGoalies: '2',
+  reminderOneDayEnabled: true,
+  reminderThreeDaysEnabled: false,
+  reminderEmailEnabled: true,
+  reminderPushEnabled: false,
   attendanceMode: 'OPEN_TO_TEAM' as AttendanceMode,
 })
 
@@ -516,6 +564,10 @@ async function loadEvents() {
         note
         maxPlayers
         maxGoalies
+        reminderOneDayEnabled
+        reminderThreeDaysEnabled
+        reminderEmailEnabled
+        reminderPushEnabled
         viewerCanEdit
       }
     }
@@ -545,6 +597,10 @@ async function loadEvents() {
         note
         maxPlayers
         maxGoalies
+        reminderOneDayEnabled
+        reminderThreeDaysEnabled
+        reminderEmailEnabled
+        reminderPushEnabled
       }
     }
     `,
@@ -581,6 +637,10 @@ function openCreateDialog() {
     note: '',
     maxPlayers: '20',
     maxGoalies: '2',
+    reminderOneDayEnabled: true,
+    reminderThreeDaysEnabled: false,
+    reminderEmailEnabled: true,
+    reminderPushEnabled: false,
     attendanceMode: 'OPEN_TO_TEAM',
     inviteAllMembers: true,
     invitedMembershipIds: [],
@@ -634,6 +694,10 @@ async function createEvent() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
+            reminderOneDayEnabled: createForm.value.reminderOneDayEnabled,
+            reminderThreeDaysEnabled: createForm.value.reminderThreeDaysEnabled,
+            reminderEmailEnabled: createForm.value.reminderEmailEnabled,
+            reminderPushEnabled: createForm.value.reminderPushEnabled,
             attendanceMode: createForm.value.attendanceMode,
             inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
             invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
@@ -660,6 +724,10 @@ async function createEvent() {
             note: createForm.value.note.trim() || null,
             maxPlayers,
             maxGoalies,
+            reminderOneDayEnabled: createForm.value.reminderOneDayEnabled,
+            reminderThreeDaysEnabled: createForm.value.reminderThreeDaysEnabled,
+            reminderEmailEnabled: createForm.value.reminderEmailEnabled,
+            reminderPushEnabled: createForm.value.reminderPushEnabled,
             attendanceMode: createForm.value.attendanceMode,
             inviteAllMembers: createForm.value.attendanceMode === 'INVITE_ONLY' ? createForm.value.inviteAllMembers : true,
             invitedMembershipIds: createForm.value.attendanceMode === 'INVITE_ONLY' && !createForm.value.inviteAllMembers ? createForm.value.invitedMembershipIds : null,
@@ -689,6 +757,10 @@ function openEditDialog(event: TeamEvent) {
     note: event.note ?? '',
     maxPlayers: event.maxPlayers != null ? String(event.maxPlayers) : '',
     maxGoalies: event.maxGoalies != null ? String(event.maxGoalies) : '',
+    reminderOneDayEnabled: event.reminderOneDayEnabled ?? true,
+    reminderThreeDaysEnabled: event.reminderThreeDaysEnabled ?? false,
+    reminderEmailEnabled: event.reminderEmailEnabled ?? true,
+    reminderPushEnabled: event.reminderPushEnabled ?? false,
     attendanceMode: (event.attendanceMode as AttendanceMode) ?? defaultAttendanceModeForType(event.eventType as EventType),
   }
   editDialog.value = true
@@ -734,7 +806,10 @@ async function saveEventEdit() {
           note: editForm.value.note.trim() || null,
           maxPlayers,
           maxGoalies,
-          reminderDaysBefore: null,
+          reminderOneDayEnabled: editForm.value.reminderOneDayEnabled,
+          reminderThreeDaysEnabled: editForm.value.reminderThreeDaysEnabled,
+          reminderEmailEnabled: editForm.value.reminderEmailEnabled,
+          reminderPushEnabled: editForm.value.reminderPushEnabled,
           attendanceMode: editForm.value.attendanceMode,
         },
       }

@@ -21,6 +21,9 @@ type User = {
   preferredPositions: string[]
   roles: 'USER' | 'ADMIN' | 'SUPER_ADMIN'
   teams: TeamMini[]
+  // Globální opt-out per kanál; in-app notifikace se nevypínají
+  emailNotificationsEnabled: boolean
+  pushNotificationsEnabled: boolean
 }
 
 type GraphQlResponse<T> = { data?: T; errors?: Array<{ message: string }> }
@@ -71,6 +74,8 @@ export const useAuth = defineStore('auth', {
               preferredLanguage
               preferredPositions
               roles
+              emailNotificationsEnabled
+              pushNotificationsEnabled
               teams {
                 id
                 name
@@ -151,6 +156,60 @@ export const useAuth = defineStore('auth', {
     async refreshMe() {
       this.meLoaded = false
       await this.fetchMe()
+    },
+
+    // Přepnutí opt-out preference (null = beze změny); optimistický update s revertem
+    async updateNotificationPreferences(emailEnabled: boolean | null, pushEnabled: boolean | null) {
+      if (!this.user) return
+
+      const previousEmail = this.user.emailNotificationsEnabled
+      const previousPush = this.user.pushNotificationsEnabled
+      if (emailEnabled !== null) this.user.emailNotificationsEnabled = emailEnabled
+      if (pushEnabled !== null) this.user.pushNotificationsEnabled = pushEnabled
+
+      try {
+        const mutation = `
+          mutation($emailEnabled: Boolean, $pushEnabled: Boolean) {
+            updateNotificationPreferences(emailEnabled: $emailEnabled, pushEnabled: $pushEnabled) {
+              emailNotificationsEnabled
+              pushNotificationsEnabled
+            }
+          }
+        `
+
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/graphql`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            query: mutation,
+            variables: { emailEnabled, pushEnabled },
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
+        const result: GraphQlResponse<{
+          updateNotificationPreferences: { emailNotificationsEnabled: boolean; pushNotificationsEnabled: boolean }
+        }> = await response.json()
+        if (result.errors) {
+          throw new Error(result.errors[0]?.message || 'Failed to update notification preferences')
+        }
+
+        const saved = result.data?.updateNotificationPreferences
+        if (saved) {
+          this.user.emailNotificationsEnabled = saved.emailNotificationsEnabled
+          this.user.pushNotificationsEnabled = saved.pushNotificationsEnabled
+        }
+      } catch (error) {
+        this.user.emailNotificationsEnabled = previousEmail
+        this.user.pushNotificationsEnabled = previousPush
+        throw error
+      }
     },
 
     async updatePreferredLanguage(language: 'cs-CZ' | 'en-US') {
