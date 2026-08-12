@@ -287,6 +287,12 @@ export default {
     deliveryStatus: 'Stav',
     deliveryAttempts: 'Pokusy',
     deliveryLastError: 'Poslední chyba',
+    deliveryActions: 'Akce',
+    deliveryRetry: 'Poslat znovu',
+    deliveryRetrySuccess: 'Doručení bylo znovu spuštěno.',
+    deliveryRetryFailed: 'Opakované odeslání selhalo.',
+    deliveryResendSentTitle: 'Email už byl odeslán',
+    deliveryResendSentMessage: 'Email už byl jednou předán SMTP serveru. Opravdu ho chcete poslat znovu?',
   },
 
   event: {

@@ -236,9 +236,12 @@
           :page="deliveryPage"
           :total-pages="deliveryTotalPages"
           :total-elements="deliveryTotalElements"
+          :retrying-delivery-id="retryingDeliveryId"
+          :retry-enabled="!isPastEvent(event)"
           @refresh="loadNotificationDeliveries"
           @prev="prevDeliveryPage"
           @next="nextDeliveryPage"
+          @retry="retryNotificationDelivery"
         />
       </q-card-section>
     </q-card>
@@ -326,6 +329,7 @@ const guestDisplayName = ref('')
 const guestPlayerRole = ref<'PLAYER' | 'GOALKEEPER'>('PLAYER')
 const notificationDeliveries = ref<NotificationDelivery[]>([])
 const deliveryLoading = ref(false)
+const retryingDeliveryId = ref<string | null>(null)
 const deliveryPage = ref(0)
 const deliveryPageSize = ref(25)
 const deliveryTotalElements = ref(0)
@@ -565,6 +569,62 @@ async function loadNotificationDeliveries() {
   } finally {
     deliveryLoading.value = false
   }
+}
+
+async function retryNotificationDelivery(delivery: NotificationDelivery) {
+  if (!(await confirmSentDeliveryResend(delivery))) return
+  retryingDeliveryId.value = delivery.id
+  try {
+    await gqlRequest<{ retryNotificationDelivery: NotificationDelivery }>(
+      `
+      mutation($deliveryId: ID!) {
+        retryNotificationDelivery(deliveryId: $deliveryId) {
+          id
+          channel
+          type
+          status
+          recipientEmail
+          teamId
+          eventId
+          seriesId
+          groupKey
+          attemptCount
+          lastError
+          createdAt
+          sentAt
+          lastAttemptAt
+        }
+      }
+      `,
+      { deliveryId: delivery.id }
+    )
+    await loadNotificationDeliveries()
+    $q.notify({ type: 'positive', message: t('teamDetail.deliveryRetrySuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('teamDetail.deliveryRetryFailed') })
+  } finally {
+    retryingDeliveryId.value = null
+  }
+}
+
+function confirmSentDeliveryResend(delivery: NotificationDelivery): Promise<boolean> {
+  if (delivery.status !== 'SENT') return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let settled = false
+    $q.dialog({
+      title: t('teamDetail.deliveryResendSentTitle'),
+      message: t('teamDetail.deliveryResendSentMessage'),
+      cancel: true,
+      persistent: true,
+    })
+      .onOk(() => {
+        settled = true
+        resolve(true)
+      })
+      .onDismiss(() => {
+        if (!settled) resolve(false)
+      })
+  })
 }
 
 function prevDeliveryPage() {

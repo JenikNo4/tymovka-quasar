@@ -28,6 +28,7 @@
           <th class="text-left">{{ t('teamDetail.deliveryStatus') }}</th>
           <th class="text-left">{{ t('teamDetail.deliveryAttempts') }}</th>
           <th class="text-left">{{ t('teamDetail.deliveryLastError') }}</th>
+          <th class="text-right">{{ t('teamDetail.deliveryActions') }}</th>
         </tr>
       </thead>
       <tbody>
@@ -47,6 +48,19 @@
           </td>
           <td>{{ delivery.attemptCount }}</td>
           <td class="delivery-error-cell">{{ delivery.lastError || '-' }}</td>
+          <td class="text-right">
+            <q-btn
+              v-if="canRetry(delivery)"
+              flat
+              dense
+              color="primary"
+              icon="restart_alt"
+              :label="t('teamDetail.deliveryRetry')"
+              :loading="retryingDeliveryId === delivery.id"
+              :disable="loading"
+              @click="$emit('retry', delivery)"
+            />
+          </td>
         </tr>
       </tbody>
     </q-markup-table>
@@ -74,6 +88,8 @@ const props = defineProps<{
   emptyText: string
   deliveries: NotificationDelivery[]
   loading?: boolean
+  retryingDeliveryId?: string | null
+  retryEnabled?: boolean
   page?: number
   totalPages?: number
   totalElements?: number
@@ -83,6 +99,7 @@ defineEmits<{
   refresh: []
   prev: []
   next: []
+  retry: [delivery: NotificationDelivery]
 }>()
 
 const { t } = useI18n()
@@ -114,8 +131,16 @@ function deliveryStatusColor(status: string): string {
   if (status === 'SENT') return 'positive'
   if (status === 'FAILED') return 'negative'
   if (status === 'SKIPPED_DUPLICATE') return 'grey-7'
+  if (status === 'SKIPPED_PREFERENCE') return 'blue-grey'
+  if (status === 'SKIPPED_RATE_LIMITED') return 'orange'
   if (status === 'NOT_IMPLEMENTED') return 'warning'
   return 'primary'
+}
+
+function canRetry(delivery: NotificationDelivery): boolean {
+  return props.retryEnabled !== false &&
+    delivery.channel === 'EMAIL' &&
+    ['FAILED', 'SKIPPED_DUPLICATE', 'SENT'].includes(delivery.status)
 }
 </script>
 
