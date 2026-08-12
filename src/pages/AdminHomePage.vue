@@ -339,9 +339,11 @@
             :page="deliveryPage"
             :total-pages="deliveryTotalPages"
             :total-elements="deliveryTotalElements"
+            :retrying-delivery-id="retryingDeliveryId"
             @refresh="loadNotificationDeliveries"
             @prev="prevDeliveryPage"
             @next="nextDeliveryPage"
+            @retry="retryNotificationDelivery"
           />
         </q-tab-panel>
       </q-tab-panels>
@@ -644,6 +646,7 @@ const deliveryEmailFilter = ref('')
 const deliveryStatusFilter = ref<NotificationDeliveryStatus | null>('FAILED')
 const deliveryChannelFilter = ref<NotificationDeliveryChannel | null>(null)
 const deliveryTypeFilter = ref<string | null>(null)
+const retryingDeliveryId = ref<string | null>(null)
 const teamActionLoading = reactive<Record<string, 'delete' | 'restore' | 'purge' | undefined>>({})
 const userDetailDialog = ref(false)
 const userDetailDialogRef = ref<{ hide: () => void } | null>(null)
@@ -671,7 +674,7 @@ const accountStatusOptions = [
   { label: 'ACTIVE', value: 'ACTIVE' },
   { label: 'BLOCKED', value: 'BLOCKED' },
 ] as const
-const deliveryStatusOptions = ['FAILED', 'SENT', 'PENDING', 'SKIPPED_DUPLICATE', 'NOT_IMPLEMENTED'].map((value) => ({ label: value, value }))
+const deliveryStatusOptions = ['FAILED', 'SENT', 'PENDING', 'SKIPPED_DUPLICATE', 'SKIPPED_PREFERENCE', 'SKIPPED_RATE_LIMITED', 'NOT_IMPLEMENTED'].map((value) => ({ label: value, value }))
 const deliveryChannelOptions = ['EMAIL', 'PUSH'].map((value) => ({ label: value, value }))
 const deliveryTypeOptions = [
   'TEAM_INVITE',
@@ -874,6 +877,62 @@ async function loadNotificationDeliveries() {
   } finally {
     deliveryLoading.value = false
   }
+}
+
+async function retryNotificationDelivery(delivery: NotificationDelivery) {
+  if (!(await confirmSentDeliveryResend(delivery))) return
+  retryingDeliveryId.value = delivery.id
+  try {
+    await gqlRequest<{ retryNotificationDelivery: NotificationDelivery }>(
+      `
+      mutation($deliveryId: ID!) {
+        retryNotificationDelivery(deliveryId: $deliveryId) {
+          id
+          channel
+          type
+          status
+          recipientEmail
+          teamId
+          eventId
+          seriesId
+          groupKey
+          attemptCount
+          lastError
+          createdAt
+          sentAt
+          lastAttemptAt
+        }
+      }
+      `,
+      { deliveryId: delivery.id }
+    )
+    await loadNotificationDeliveries()
+    $q.notify({ type: 'positive', message: t('teamDetail.deliveryRetrySuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('teamDetail.deliveryRetryFailed') })
+  } finally {
+    retryingDeliveryId.value = null
+  }
+}
+
+function confirmSentDeliveryResend(delivery: NotificationDelivery): Promise<boolean> {
+  if (delivery.status !== 'SENT') return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let settled = false
+    $q.dialog({
+      title: t('teamDetail.deliveryResendSentTitle'),
+      message: t('teamDetail.deliveryResendSentMessage'),
+      cancel: true,
+      persistent: true,
+    })
+      .onOk(() => {
+        settled = true
+        resolve(true)
+      })
+      .onDismiss(() => {
+        if (!settled) resolve(false)
+      })
+  })
 }
 
 async function loadAdminCapabilities() {

@@ -188,7 +188,9 @@
       :empty-text="t('teamDetail.noDeliveries')"
       :deliveries="notificationDeliveries"
       :loading="deliveryLoading"
+      :retrying-delivery-id="retryingDeliveryId"
       @refresh="loadNotificationDeliveries"
+      @retry="retryNotificationDelivery"
     />
 
     <q-dialog v-model="createDialog">
@@ -336,6 +338,7 @@ const members = ref<TeamMember[]>([])
 const pendingMembers = ref<TeamMember[]>([])
 const notificationDeliveries = ref<NotificationDelivery[]>([])
 const deliveryLoading = ref(false)
+const retryingDeliveryId = ref<string | null>(null)
 const memberActionId = ref('')
 const memberTeamRoleDrafts = reactive<Record<string, TeamRole>>({})
 const myMembership = ref<TeamMember | null>(null)
@@ -713,6 +716,62 @@ async function loadNotificationDeliveries() {
   } finally {
     deliveryLoading.value = false
   }
+}
+
+async function retryNotificationDelivery(delivery: NotificationDelivery) {
+  if (!(await confirmSentDeliveryResend(delivery))) return
+  retryingDeliveryId.value = delivery.id
+  try {
+    await gqlRequest<{ retryNotificationDelivery: NotificationDelivery }>(
+      `
+      mutation($deliveryId: ID!) {
+        retryNotificationDelivery(deliveryId: $deliveryId) {
+          id
+          channel
+          type
+          status
+          recipientEmail
+          teamId
+          eventId
+          seriesId
+          groupKey
+          attemptCount
+          lastError
+          createdAt
+          sentAt
+          lastAttemptAt
+        }
+      }
+      `,
+      { deliveryId: delivery.id }
+    )
+    await loadNotificationDeliveries()
+    $q.notify({ type: 'positive', message: t('teamDetail.deliveryRetrySuccess') })
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof Error ? err.message : t('teamDetail.deliveryRetryFailed') })
+  } finally {
+    retryingDeliveryId.value = null
+  }
+}
+
+function confirmSentDeliveryResend(delivery: NotificationDelivery): Promise<boolean> {
+  if (delivery.status !== 'SENT') return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let settled = false
+    $q.dialog({
+      title: t('teamDetail.deliveryResendSentTitle'),
+      message: t('teamDetail.deliveryResendSentMessage'),
+      cancel: true,
+      persistent: true,
+    })
+      .onOk(() => {
+        settled = true
+        resolve(true)
+      })
+      .onDismiss(() => {
+        if (!settled) resolve(false)
+      })
+  })
 }
 
 async function saveMyTeamRole() {

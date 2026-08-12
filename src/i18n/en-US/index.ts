@@ -290,6 +290,12 @@ export default {
     deliveryStatus: 'Status',
     deliveryAttempts: 'Attempts',
     deliveryLastError: 'Last error',
+    deliveryActions: 'Actions',
+    deliveryRetry: 'Retry',
+    deliveryRetrySuccess: 'Delivery retry was started.',
+    deliveryRetryFailed: 'Delivery retry failed.',
+    deliveryResendSentTitle: 'Email was already sent',
+    deliveryResendSentMessage: 'The email was already handed over to the SMTP server. Do you really want to send it again?',
   },
 
   event: {
