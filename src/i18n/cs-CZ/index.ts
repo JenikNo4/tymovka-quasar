@@ -320,7 +320,7 @@ export default {
     reminderOneDay: '1 den předem',
     reminderThreeDays: '3 dny předem',
     reminderEmail: 'E-mail',
-    reminderPush: 'Push (připravujeme)',
+    reminderPush: 'Push notifikace',
     attendanceMode: 'Přístup k události',
     attendanceModeLabel: {
       OPEN_TO_TEAM: 'Otevřeno pro tým',

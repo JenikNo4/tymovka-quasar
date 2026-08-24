@@ -323,7 +323,7 @@ export default {
     reminderOneDay: '1 day before',
     reminderThreeDays: '3 days before',
     reminderEmail: 'Email',
-    reminderPush: 'Push (coming soon)',
+    reminderPush: 'Push notifications',
     attendanceMode: 'Event access',
     attendanceModeLabel: {
       OPEN_TO_TEAM: 'Open to team',

@@ -229,7 +229,7 @@
                 <q-toggle v-model="createForm.reminderEmailEnabled" :label="t('event.reminderEmail')" />
               </div>
               <div class="col-12 col-sm-6">
-                <q-toggle v-model="createForm.reminderPushEnabled" disable :label="t('event.reminderPush')" />
+                <q-toggle v-model="createForm.reminderPushEnabled" :label="t('event.reminderPush')" />
               </div>
             </div>
           </q-card>
