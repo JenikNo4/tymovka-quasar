@@ -138,8 +138,9 @@ function deliveryStatusColor(status: string): string {
 }
 
 function canRetry(delivery: NotificationDelivery): boolean {
-  return props.retryEnabled !== false &&
-    delivery.channel === 'EMAIL' &&
+  if (props.retryEnabled === false) return false
+  if (delivery.channel === 'PUSH') return delivery.status === 'FAILED'
+  return delivery.channel === 'EMAIL' &&
     ['FAILED', 'SKIPPED_DUPLICATE', 'SENT'].includes(delivery.status)
 }
 </script>

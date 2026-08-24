@@ -685,6 +685,7 @@ const deliveryTypeOptions = [
   'EVENT_UPDATED_EARLIER',
   'EVENT_CANCELED',
   'EVENT_REMINDER',
+  'EVENT_WAITLIST_PROMOTED',
 ].map((value) => ({ label: value, value }))
 
 const manageableTeams = computed(() =>
